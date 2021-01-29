@@ -9,6 +9,12 @@ strcpy(char *s, const char *t)
   char *os;
 
   os = s;
+  /*
+   * 运算符优先级：(++) > (*) > (=)
+   * = 为左值运算
+   * 因此括号中的返回值为 *s
+   *
+   */
   while((*s++ = *t++) != 0)
     ;
   return os;
