@@ -4,6 +4,7 @@
 #include "kernel/param.h"
 #include "user/user.h"
 
+/* 从左向右解析字符串, 从非空格(换行)开始, 到空格(换行)结束 */
 static int parse_args(char *str, int str_len, char *out)
 {
     int i, len;
