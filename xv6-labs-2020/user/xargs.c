@@ -34,77 +34,62 @@ static int parse_args(char *str, int str_len, char *out)
     return right;
 }
 
+/* 读取字符串, 换行结束 */
+static int getcmd(char *buf, int nbuf)
+{
+    memset(buf, 0, nbuf);
+    gets(buf, nbuf);
+    if (buf[0] == 0) // EOF
+        return -1;
+    return 0;
+}
 
-#define BUF_SIZE        (10)
+#define BUF_SIZE        (50)
 
 int main(int argc, char *argv[])
 {
     char *p;
-    char cmd[BUF_SIZE] = {0};
     char buf[BUF_SIZE] = {0};
-    char out[MAXARG][BUF_SIZE] = {0};
+    char tmp[MAXARG][BUF_SIZE] = {0};
     char *args[MAXARG] = {0};
-    int i, len, arg_num;
-    int right;
-    int out_index = 0;
+    int i, right, len;
+    int fix_narg = 0, tmp_index = 0;
 
     if (argc < 2)
         exit(0);
 
-    len = read(0, buf, sizeof(buf));
-    //printf("[%s %d]: %s\n", __func__, __LINE__, buf);
-
-#if 0
-    len = strlen("/bin/");
-    strcpy(cmd, "/bin/");
-    p = cmd + len;
-#endif
-    (void)p;
-    strcpy(cmd, argv[1]);
-    //printf("[%s %d]: %s\n", __func__, __LINE__, cmd);
-
-    arg_num = 0;
-    args[arg_num++] = cmd;
+    args[fix_narg++] = argv[1];
     for (i = 2; i < argc; i++)
-        args[arg_num++] = argv[i];
+        args[fix_narg++] = argv[i];
 
-    //parse_str("hello too", strlen("hello too"));
-    len = strlen(buf);
-    p = buf;
-    while (1)
+    while (getcmd(buf, BUF_SIZE) != -1)
     {
-        right = parse_args(p, len, out[out_index]);
-        if (right == -1)
-            break;
-        //printf("[%s %d]: %s\n", __func__, __LINE__, out[out_index]);
-        args[arg_num++] = out[out_index++];
-
-        //printf("[%s %d]: %d %d\n", __func__, __LINE__, right, len);
-        p += right;
-        len -= right;
-        //printf("[%s %d]: %d %d\n", __func__, __LINE__, right, len);
-    }
-
-#if 0
-    for (i = 0; i < arg_num; i++)
-        printf("[%s %d]: arg[%d] = %s\n", __func__, __LINE__, i, args[i]);
-#endif
-
-    exec(cmd, args);
-
-#if 0
-    while(read(fd, &de, sizeof(de)) == sizeof(de)){
-        if(de.inum == 0)
-            continue;
-        memmove(p, de.name, DIRSIZ);
-        p[DIRSIZ] = 0;
-        if(stat(buf, &st) < 0){
-            printf("ls: cannot stat %s\n", buf);
-            continue;
+        i = fix_narg;
+        len = strlen(buf);
+        p = buf;
+        while (1)
+        {
+            right = parse_args(p, len, tmp[tmp_index]);
+            if (right == -1)
+                break;
+            args[i++] = tmp[tmp_index++];
+            p += right;
+            len -= right;
         }
-        printf("%s %d %d %d\n", fmtname(buf), st.type, st.ino, st.size);
-    }
+
+#if 0
+        for (i = 0; i < index; i++)
+            printf("[%s %d]: arg[%d] = %s\n", __func__, __LINE__, i, args[i]);
 #endif
 
+        if (fork() == 0)
+            exec(args[0], args);
+        else {
+            wait(0);
+            tmp_index = 0;
+            memset(args + fix_narg, 0, sizeof(char *) * (MAXARG - fix_narg));
+        }
+
+    }
     exit(0);
 }
