@@ -116,5 +116,15 @@ enum
 # define DT_WHT        DT_WHT
    };
 ```
-
-
+# fd(0, 1, 2)
+文件句柄为0, 为标准输入文件 /dev/stdin
+文件句柄为1，为标准输出文件 /dev/stdout
+文件句柄为2，为错误输出文件 /dev/stderr
+```
+ls -lh /dev/stdin
+    lrwxrwxrwx 1 root root 15 Jan 19 21:17 /dev/stdin -> /proc/self/fd/0
+ls -lh /dev/stdout
+    lrwxrwxrwx 1 root root 15 Jan 19 21:17 /dev/stdout -> /proc/self/fd/1
+ls -lh /dev/stderr
+    lrwxrwxrwx 1 root root 15 Jan 19 21:17 /dev/stderr -> /proc/self/fd/2
+```

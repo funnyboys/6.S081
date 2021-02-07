@@ -26,3 +26,9 @@ $ git checkout util
 Branch 'util' set up to track remote branch 'util' from 'origin'.
 Switched to a new branch 'util'
 ```
+# 切换到kernel分支
+```
+$ git fetch
+$ git checkout syscall
+$ make clean
+```
