@@ -8,7 +8,7 @@ _entry:
         # stack0 is declared in start.c,
         # with a 4096-byte stack per CPU.
         # sp = stack0 + (hartid * 4096)
-        la sp, stack0
+        la sp, stack0   #将stack0的地址加载到sp中
         li a0, 1024*4
 	csrr a1, mhartid
         addi a1, a1, 1

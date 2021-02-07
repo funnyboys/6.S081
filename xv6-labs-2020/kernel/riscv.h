@@ -10,9 +10,9 @@ r_mhartid()
 // Machine Status Register, mstatus
 
 #define MSTATUS_MPP_MASK (3L << 11) // previous mode.
-#define MSTATUS_MPP_M (3L << 11)
-#define MSTATUS_MPP_S (1L << 11)
-#define MSTATUS_MPP_U (0L << 11)
+#define MSTATUS_MPP_M (3L << 11)    // machine mode
+#define MSTATUS_MPP_S (1L << 11)    // supervisor mode
+#define MSTATUS_MPP_U (0L << 11)    // user mode
 #define MSTATUS_MIE (1L << 3)    // machine-mode interrupt enable.
 
 static inline uint64
