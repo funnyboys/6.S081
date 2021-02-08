@@ -126,6 +126,7 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+  p->syscall_nr_mask = 0;
 
   return p;
 }
@@ -288,6 +289,8 @@ fork(void)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
+
+  np->syscall_nr_mask = p->syscall_nr_mask;
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
