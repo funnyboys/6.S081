@@ -3,7 +3,6 @@
 # (e.g., LB=util).  Run make grade to test solution with the lab's
 # grade script (e.g., grade-lab-util).
 
--include conf/lab.mk
 
 K=kernel
 U=user
@@ -159,7 +158,7 @@ UPROGS=\
 ifeq ($(LAB),syscall)
 UPROGS += \
 	$U/_trace\
-	$U/_sysinfotest
+	#$U/_sysinfotest
 endif
 
 ifeq ($(LAB),trap)
