@@ -158,7 +158,7 @@ UPROGS=\
 ifeq ($(LAB),syscall)
 UPROGS += \
 	$U/_trace\
-	#$U/_sysinfotest
+	$U/_sysinfotest
 endif
 
 ifeq ($(LAB),trap)

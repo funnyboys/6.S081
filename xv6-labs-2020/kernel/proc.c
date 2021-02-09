@@ -696,3 +696,30 @@ procdump(void)
     printf("\n");
   }
 }
+
+/* return the number of process whose state is not UNUSED */
+int get_nr_proc(void)
+{
+    int nr = 0;
+    struct proc *p;
+
+    for (p = proc; p < &proc[NPROC]; p++)
+        if(p->state != UNUSED)
+            nr++;
+
+    printf("nr = %d\n", nr);
+    return nr;
+}
+
+/* get load average */
+int get_load_average(void)
+{
+    int nr_proc = 0;
+    struct proc *p;
+
+    for (p = proc; p < &proc[NPROC]; p++)
+        if (p->state == RUNNABLE || p->state == RUNNING)
+            nr_proc++;
+
+    return nr_proc;
+}

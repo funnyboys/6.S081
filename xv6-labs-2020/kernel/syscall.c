@@ -105,6 +105,7 @@ extern uint64 sys_wait(void);
 extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
 extern uint64 sys_trace(void);
+extern uint64 sys_sysinfo(void);
 
 typedef struct syscall_struct {
     int num;
@@ -114,66 +115,45 @@ typedef struct syscall_struct {
 
 syscall_struct syscalls[MAX_SYS_NUM] = {
     {SYS_error, "error", 0},
-    {SYS_fork, 
-"fork", sys_fork},
-    {SYS_exit, 
-"exit", sys_exit},
-    {SYS_wait, 
-"wait", sys_wait},
-    {SYS_pipe, 
-"pipe", sys_pipe},
-    {SYS_read, 
-"read", sys_read},
-    {SYS_kill, 
-"kill", sys_kill},
-    {SYS_exec, 
-"exec", sys_exec},
+    {SYS_fork, "fork", sys_fork},
+    {SYS_exit, "exit", sys_exit},
+    {SYS_wait, "wait", sys_wait},
+    {SYS_pipe, "pipe", sys_pipe},
+    {SYS_read, "read", sys_read},
+    {SYS_kill, "kill", sys_kill},
+    {SYS_exec, "exec", sys_exec},
     {SYS_fstat, "fstat", sys_fstat},
-    {SYS_chdir, 
-"chdir", sys_chdir},
-    {SYS_dup, 
-"dup", sys_dup},
-    {SYS_getpid, 
-"getpid", sys_getpid},
-    {SYS_sbrk, 
-"sbrk", sys_sbrk},
-    {SYS_sleep, 
-"sleep", sys_sleep},
-    {SYS_uptime, 
-"uptime", sys_uptime},
-    {SYS_open, 
-"open", sys_open},
-    {SYS_write, 
-"write", sys_write},
-    {SYS_mknod, 
-"mknod", sys_mknod},
-    {SYS_unlink, 
-"unlink", sys_unlink},
-    {SYS_link, 
-"link", sys_link},
-    {SYS_mkdir, 
-"mkdir", 0},
-    {SYS_close, 
-"close", sys_close},
-    {SYS_trace, 
-"trace", sys_trace},
+    {SYS_chdir, "chdir", sys_chdir},
+    {SYS_dup, "dup", sys_dup},
+    {SYS_getpid, "getpid", sys_getpid},
+    {SYS_sbrk, "sbrk", sys_sbrk},
+    {SYS_sleep, "sleep", sys_sleep},
+    {SYS_uptime, "uptime", sys_uptime},
+    {SYS_open, "open", sys_open},
+    {SYS_write, "write", sys_write},
+    {SYS_mknod, "mknod", sys_mknod},
+    {SYS_unlink, "unlink", sys_unlink},
+    {SYS_link, "link", sys_link},
+    {SYS_mkdir, "mkdir", 0},
+    {SYS_close, "close", sys_close},
+    {SYS_trace, "trace", sys_trace},
+    {SYS_sysinfo, "sysinfo", sys_sysinfo},
 };
 
 void
 syscall(void)
 {
-  int num;
-  struct proc *p = myproc();
+    int num;
+    struct proc *p = myproc();
 
-  num = p->trapframe->a7;
-  if(num > 0 && num < MAX_SYS_NUM && syscalls[num].fn) {
-
-    p->trapframe->a0 = syscalls[num].fn();
-    if (p->syscall_nr_mask & (1 << num))
-      printf("%d: syscall %s -> %d\n", p->pid, syscalls[num].name, p->trapframe->a0);
-  } else {
-    printf("%d %s: unknown sys call %d\n",
-            p->pid, p->name, num);
-    p->trapframe->a0 = -1;
-  }
+    num = p->trapframe->a7;
+    if(num > 0 && num < MAX_SYS_NUM && syscalls[num].fn) {
+        p->trapframe->a0 = syscalls[num].fn();
+        if (p->syscall_nr_mask & (1 << num))
+            printf("%d: syscall %s -> %d\n", p->pid, syscalls[num].name, p->trapframe->a0);
+    } else {
+        printf("%d %s: unknown sys call %d\n",
+                p->pid, p->name, num);
+        p->trapframe->a0 = -1;
+    }
 }

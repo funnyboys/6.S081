@@ -5,6 +5,8 @@
 #include "param.h"
 #include "memlayout.h"
 #include "spinlock.h"
+#include "sysinfo.h"
+#include "syscall.h"
 #include "proc.h"
 
 uint64
@@ -104,4 +106,35 @@ uint64 sys_trace(void)
         return -1;
     myproc()->syscall_nr_mask = mask;
     return 0;
+}
+
+uint64 sys_sysinfo(void)
+{
+    int ret;
+    uint64 info; // user pointer to struct sysinfo
+    struct sysinfo k_info;
+    struct proc *p;
+
+    if (argaddr(0, &info) < 0)
+        return -1;
+
+    p = myproc();
+    memset(&k_info, 0, sizeof(k_info));
+
+    (void)ret;
+#if 0
+    /* print input param */
+    if (p->syscall_nr_mask & (1 << SYS_sysinfo)) {
+        ret = copyin(p->pagetable, (char *)&k_info, info, sizeof(k_info));
+        if (ret)
+            return ret;
+        printf("k_info->freemem = %d\n", k_info.freemem);
+        printf("k_info->nproc = %d\n", k_info.nproc);
+    }
+#endif
+
+    k_info.freemem = get_free_mem();
+    k_info.nproc = get_nr_proc();
+
+    return copyout(p->pagetable, info, (char *)&k_info, sizeof(k_info));
 }
