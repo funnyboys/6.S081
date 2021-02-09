@@ -44,6 +44,7 @@ void print_type(struct stat st)
     }
 }
 
+/* 递归ls所有文件 */
 void ls(char *path)
 {
     DIR *dir = NULL;
