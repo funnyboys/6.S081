@@ -134,7 +134,7 @@ syscall_struct syscalls[MAX_SYS_NUM] = {
     {SYS_mknod, "mknod", sys_mknod},
     {SYS_unlink, "unlink", sys_unlink},
     {SYS_link, "link", sys_link},
-    {SYS_mkdir, "mkdir", 0},
+    {SYS_mkdir, "mkdir", sys_mkdir},
     {SYS_close, "close", sys_close},
     {SYS_trace, "trace", sys_trace},
     {SYS_sysinfo, "sysinfo", sys_sysinfo},
