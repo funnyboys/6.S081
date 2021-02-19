@@ -56,3 +56,20 @@ Focus set to src window.
 ```
 set print pretty on
 ```
+
+## 显示所有寄存器信息
+```
+info registers
+```
+
+## 打印指定寄存器信息
+```
+p $x0
+在指定的寄存器名前加$
+```
+
+## 添加地址断点
+```
+b *0x44444444
+地址前面必须要加星号
+```
