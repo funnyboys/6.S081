@@ -1,3 +1,3 @@
 #LAB=util
-LAB=syscall
-#LAB=pgtbl
+#LAB=syscall
+LAB=pgtbl

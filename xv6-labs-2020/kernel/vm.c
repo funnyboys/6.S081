@@ -440,3 +440,35 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
     return -1;
   }
 }
+
+/* 这里 %p 类似 0x%x 直接打印十六进制 */
+static void print_pagetable(pagetable_t pagetable, int *depth)
+{
+    int i;
+    char *prefix[4] = {"..", ".. ..", ".. .. ..", ".. .. .. .."};
+    for (i = 0; i < MAX_PTE_NR; i++) {
+        pte_t *pte = &pagetable[i];
+        if (pte == 0)
+            continue;
+        if ((*pte & PTE_V) == 0)
+            continue;
+
+        printf("%s", prefix[*depth]);
+        if ((*pte & (PTE_R|PTE_W|PTE_X)) == 0) {
+            // this PTE points to a lower-level page table.
+            printf("%d: pte %p pa %p\n", i, *pte, PTE2PA(*pte));
+            *depth = *depth + 1;
+            print_pagetable((pagetable_t)(PTE2PA(*pte)), depth);
+        } else
+            printf("%d: pte %p pa %p\n", i, *pte, PTE2PA(*pte));
+
+    }
+    *depth = *depth - 1;
+}
+
+void vmprint(pagetable_t pagetable)
+{
+    int depth = 0;
+    printf("page table %p\n", pagetable);
+    print_pagetable(pagetable, &depth);
+}
