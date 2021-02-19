@@ -180,6 +180,7 @@ UPROGS=\
 	$U/_find\
 	$U/_xargs\
 	$U/_uptime\
+	$U/_utest\
 
 ifeq ($(LAB),syscall)
 UPROGS += \
