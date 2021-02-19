@@ -21,6 +21,8 @@ static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
 
+extern pagetable_t kernel_pagetable;
+
 // initialize the proc table at boot time.
 void
 procinit(void)
@@ -31,6 +33,7 @@ procinit(void)
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
 
+#if 0
       // Allocate a page for the process's kernel stack.
       // Map it high in memory, followed by an invalid
       // guard page.
@@ -40,8 +43,10 @@ procinit(void)
       uint64 va = KSTACK((int) (p - proc));
       kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
       p->kstack = va;
+#endif
+      
   }
-  kvminithart();
+  //kvminithart();
 }
 
 // Must be called with interrupts disabled,
@@ -121,6 +126,30 @@ found:
     return 0;
   }
 
+  // An empty kernel page table.
+  p->k_pagetable = (pagetable_t) kalloc();
+  if (p->k_pagetable == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
+  memset(p->k_pagetable, 0, PGSIZE);
+  kvminit_new(p->k_pagetable);
+
+  // Allocate a page for the process's kernel stack.
+  // Map it high in memory, followed by an invalid
+  // guard page.
+  char *pa = kalloc();
+  if(pa == 0)
+    panic("kalloc");
+  uint64 va = KSTACK((int) (p - proc));
+  mappages(p->k_pagetable, va, PGSIZE, (uint64)pa, PTE_R | PTE_W);
+
+  //printf("3\n");
+  //vmprint(p->k_pagetable);
+
+  p->kstack = va;
+
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
@@ -142,6 +171,12 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  if(p->k_pagetable) {
+    kvmfree_new(p->k_pagetable);
+    uvmunmap(p->k_pagetable, p->kstack, 1, 0);
+    vmprint(p->k_pagetable);
+    freewalk(p->k_pagetable);;
+  }
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -449,6 +484,7 @@ wait(uint64 addr)
   }
 }
 
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -461,6 +497,9 @@ scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
+
+  //w_satp(MAKE_SATP(c->proc->k_pagetable));
+  //sfence_vma();
   
   c->proc = 0;
   for(;;){
@@ -476,6 +515,19 @@ scheduler(void)
         // before jumping back to us.
         p->state = RUNNING;
         c->proc = p;
+
+        //printf("kernel page table!\n");
+        //vmprint(kernel_pagetable);
+
+        printf("before swtch 1!\n");
+        //vmprint(p->k_pagetable);
+        printf("%p %p\n", p->k_pagetable, MAKE_SATP(p->k_pagetable));
+        w_satp(MAKE_SATP(p->k_pagetable));
+        
+        printf("before swtch 2 !\n");
+        sfence_vma();
+        
+        printf("before swtch 3!\n");
         swtch(&c->context, &p->context);
 
         // Process is done running for now.
