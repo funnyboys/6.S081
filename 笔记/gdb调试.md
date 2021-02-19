@@ -36,3 +36,23 @@ Num     Type           Disp Enb Address            What
 ```
 layout split
 ```
+分屏模式下切换窗口：
+1. 切换到下一窗口
+```
+(gdb) fs next
+Focus set to cmd window.
+```
+2. 指定切换窗口
+```
+(gdb) info win
+Name       Lines Focus
+src           38
+status         1
+cmd           20 (has focus)
+(gdb) fs src
+Focus set to src window.
+```
+## 打印结构体中的内容
+```
+set print pretty on
+```
