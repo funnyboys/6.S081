@@ -549,7 +549,7 @@ uint64 find_last_valid_va(pagetable_t kernel_pagetable)
  * 5. 添加 new_pagetable 对 new_va 和 new_pa 的映射
  */
 int copy_data_across_pagetable(uint64 old_va, pagetable_t old_pagetable, 
-        uint64 new_va, pagetable_t new_pagetable, pagetable_t current_pagetable)
+        uint64 new_va, pagetable_t new_pagetable, pagetable_t current_pagetable, int perm)
 {
     pte_t *pte;
 
@@ -581,7 +581,7 @@ int copy_data_across_pagetable(uint64 old_va, pagetable_t old_pagetable,
             printf("[%s %d]\n", __func__, __LINE__);
             return 4;
         }
-        if (mappages(current_pagetable, cur_old_va, PGSIZE, (uint64)old_pa, PTE_W|PTE_X|PTE_R) != 0) {
+        if (mappages(current_pagetable, cur_old_va, PGSIZE, (uint64)old_pa, perm) != 0) {
             printf("[%s %d]\n", __func__, __LINE__);
             return 5;
         }
@@ -593,7 +593,7 @@ int copy_data_across_pagetable(uint64 old_va, pagetable_t old_pagetable,
         printf("[%s %d]\n", __func__, __LINE__);
         return 6;
     }
-    if (mappages(current_pagetable, cur_new_va, PGSIZE, (uint64)new_pa, PTE_W|PTE_X|PTE_R) != 0) {
+    if (mappages(current_pagetable, cur_new_va, PGSIZE, (uint64)new_pa, perm) != 0) {
         printf("[%s %d]\n", __func__, __LINE__);
         return 7;
     }
@@ -607,7 +607,7 @@ int copy_data_across_pagetable(uint64 old_va, pagetable_t old_pagetable,
     uvmunmap(current_pagetable, cur_new_va, 1, 0);          //not free
 
     /* step 5 */
-    if ((mappages(new_pagetable, new_va, PGSIZE, new_pa, PTE_W|PTE_X|PTE_R) != 0)) {
+    if ((mappages(new_pagetable, new_va, PGSIZE, new_pa, perm) != 0)) {
         printf("[%s %d]\n", __func__, __LINE__);
         uvmunmap(new_pagetable, new_va, 1, 0);      //not free
         return 8;

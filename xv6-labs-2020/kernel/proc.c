@@ -112,6 +112,10 @@ void copy_kernel_pagetable(struct proc *old, struct proc *new)
     /* 清空在内核页表中之前映射的用户态空间 */
     unmap_uva_in_kpgt(new->k_pagetable, 0, MAX_UVA_KERNEL/PGSIZE, 1);
 
+    todo:
+        1. stack和heap需要单独拷贝
+        2. stack之前只需要重新映射，不能释放内存
+
     for (va = 0; va < MAX_UVA_KERNEL; va += PGSIZE) {
         pte_t *pte = walk(old->k_pagetable, va, 0);
         if (pte == 0)
@@ -119,7 +123,7 @@ void copy_kernel_pagetable(struct proc *old, struct proc *new)
         if ((*pte & PTE_V) == 0)
             continue;
 
-        if (copy_data_across_pagetable(va, old->k_pagetable, va, new->k_pagetable, old->k_pagetable))
+        if (copy_data_across_pagetable(va, old->k_pagetable, va, new->k_pagetable, old->k_pagetable, PTE_W|PTE_X|PTE_R))
             printf("[%s %d]\n", __func__, __LINE__);
     }
 

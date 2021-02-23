@@ -192,7 +192,7 @@ int             copyinstr(pagetable_t, char *, uint64, uint64);
 void            vmprint(pagetable_t pagetable);
 uint64          find_last_valid_va(pagetable_t);
 void            unmap_uva_in_kpgt(pagetable_t, uint64, uint64, int);
-int             copy_data_across_pagetable(uint64, pagetable_t, uint64, pagetable_t, pagetable_t);
+int             copy_data_across_pagetable(uint64, pagetable_t, uint64, pagetable_t, pagetable_t, int);
 
 
 // plic.c

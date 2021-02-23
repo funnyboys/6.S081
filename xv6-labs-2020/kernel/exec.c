@@ -14,12 +14,13 @@ exec(char *path, char **argv)
 {
   char *s, *last;
   int i, off;
-  uint64 argc, sz = 0, sp, ustack[MAXARG+1], stackbase;
+  uint64 argc, va, pa, sz = 0, sp, ustack[MAXARG+1], stackbase;
   struct elfhdr elf;
   struct inode *ip;
   struct proghdr ph;
   pagetable_t pagetable = 0, oldpagetable;
   struct proc *p = myproc();
+  pte_t *pte;
 
   begin_op();
 
@@ -124,12 +125,30 @@ exec(char *path, char **argv)
   if(p->pid==1)
     vmprint(p->pagetable);
 
+  /* 映射 0 - stack(sz-PGSIZE) 间的地址 */
+  for (va = 0; va <= (sz-PGSIZE); va += PGSIZE) {
+    pte = walk(pagetable, va, 0);
+    if (pte == 0) {
+        printf("[%s %d]\n", __func__, __LINE__);
+        return 1;
+    }
+    if ((*pte & PTE_V) == 0) {
+        printf("[%s %d]\n", __func__, __LINE__);
+        return 2;
+    }
+    pa = PTE2PA(*pte);
+    if (mappages(p->k_pagetable, va, PGSIZE, pa, PTE_W|PTE_X|PTE_R) != 0) {
+      printf("[%s %d] va is %p, pa is %p\n", __func__, __LINE__, va, pa);
+      return 5;
+    }
+  }
+
   /* 清空在内核页表中之前映射的用户态空间 */
   unmap_uva_in_kpgt(p->k_pagetable, 0, MAX_UVA_KERNEL/PGSIZE, 1);
 
   /* 重新映射用户态 stack */
   // stack_base = p->sz - PGSIZE
-  if (copy_data_across_pagetable(p->sz - PGSIZE, p->pagetable, p->sz - PGSIZE, p->k_pagetable, p->k_pagetable))
+  if (copy_data_across_pagetable(p->sz - PGSIZE, p->pagetable, p->sz - PGSIZE, p->k_pagetable, p->k_pagetable, PTE_W|PTE_X|PTE_R))
     printf("[%s %d]\n", __func__, __LINE__);
 
   sfence_vma();
