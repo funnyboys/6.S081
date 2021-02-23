@@ -20,39 +20,8 @@ extern char trampoline[]; // trampoline.S
 /*
  * create a direct-map page table for the kernel.
  */
-void
-kvminit()
+void kvminit(pagetable_t pagetable)
 {
-  kernel_pagetable = (pagetable_t) kalloc();
-  memset(kernel_pagetable, 0, PGSIZE);
-
-  // uart registers
-  kvmmap(UART0, UART0, PGSIZE, PTE_R | PTE_W);
-
-  // virtio mmio disk interface
-  kvmmap(VIRTIO0, VIRTIO0, PGSIZE, PTE_R | PTE_W);
-
-  // CLINT
-  kvmmap(CLINT, CLINT, 0x10000, PTE_R | PTE_W);
-
-  // PLIC
-  kvmmap(PLIC, PLIC, 0x400000, PTE_R | PTE_W);
-
-  // map kernel text executable and read-only.
-  kvmmap(KERNBASE, KERNBASE, (uint64)etext-KERNBASE, PTE_R | PTE_X);
-
-  // map kernel data and the physical RAM we'll make use of.
-  kvmmap((uint64)etext, (uint64)etext, PHYSTOP-(uint64)etext, PTE_R | PTE_W);
-
-  // map the trampoline for trap entry/exit to
-  // the highest virtual address in the kernel.
-  kvmmap(TRAMPOLINE, (uint64)trampoline, PGSIZE, PTE_R | PTE_X);
-}
-
-void
-kvminit_new(pagetable_t pagetable)
-{
-
   // uart registers
   mappages(pagetable, UART0, PGSIZE, UART0, PTE_R | PTE_W);
 
@@ -76,7 +45,7 @@ kvminit_new(pagetable_t pagetable)
   mappages(pagetable, TRAMPOLINE, PGSIZE, (uint64)trampoline, PTE_R | PTE_X);
 }
 
-void kvmfree_new(pagetable_t pagetable)
+void kvmuninit(pagetable_t pagetable)
 {
   uvmunmap(pagetable, UART0, PGSIZE/PGSIZE, 0);
 
@@ -97,11 +66,9 @@ void kvmfree_new(pagetable_t pagetable)
 // Switch h/w page table register to the kernel's page table,
 // and enable paging.
 void
-kvminithart()
+kvminithart(pagetable_t pagetable)
 {
-    printf("kernel_pagetable: %p %p\n", kernel_pagetable, MAKE_SATP(kernel_pagetable));
-
-  w_satp(MAKE_SATP(kernel_pagetable));
+  w_satp(MAKE_SATP(pagetable));
   sfence_vma();
 }
 
@@ -170,9 +137,10 @@ kvmmap(uint64 va, uint64 pa, uint64 sz, int perm)
     panic("kvmmap");
 }
 
+// use current kernel pagetable 
 // translate a kernel virtual address to
-// a physical address. only needed for
-// addresses on the stack.
+// a physical address.
+// only needed for addresses on the stack.
 // assumes va is page aligned.
 uint64
 kvmpa(uint64 va)
@@ -180,8 +148,7 @@ kvmpa(uint64 va)
   uint64 off = va % PGSIZE;
   pte_t *pte;
   uint64 pa;
-  
-  //pte = walk(kernel_pagetable, va, 0);
+
   pte = walk(myproc()->k_pagetable, va, 0);
   if(pte == 0)
     panic("kvmpa");
@@ -206,8 +173,10 @@ mappages(pagetable_t pagetable, uint64 va, uint64 size, uint64 pa, int perm)
   for(;;){
     if((pte = walk(pagetable, a, 1)) == 0)
       return -1;
-    if(*pte & PTE_V)
+    if(*pte & PTE_V) {
+      printf("pagetable is %p, pa is %p, va is %p\n", pagetable, pa, a);
       panic("remap");
+    }
     *pte = PA2PTE(pa) | perm | PTE_V;
     if(a == last)
       break;
@@ -429,6 +398,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 int
 copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
+#if 1
   uint64 n, va0, pa0;
 
   while(len > 0){
@@ -446,6 +416,9 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
     srcva = va0 + PGSIZE;
   }
   return 0;
+#else
+  return copyin_new(pagetable, dst, srcva, len);
+#endif
 }
 
 // Copy a null-terminated string from user to kernel.
@@ -521,4 +494,124 @@ void vmprint(pagetable_t pagetable)
     int depth = 0;
     printf("page table %p\n", pagetable);
     print_pagetable(pagetable, &depth);
+}
+
+/* unmap 内核页表中的用户态地址映射信息 */
+void unmap_uva_in_kpgt(pagetable_t k_pagetable, uint64 va, uint64 npages, int do_free)
+{
+    uint64 i;
+    for (i = 0; i < npages; i++, va += PGSIZE) {
+        if (va >= MAX_UVA_KERNEL)
+            break;
+        pte_t *pte = walk(k_pagetable, va, 0);
+        if (pte == 0)
+            continue;
+        if ((*pte & PTE_V) == 0)
+            continue;
+        
+        uvmunmap(k_pagetable, va, 1, do_free);
+    }
+}
+
+/* 
+ * 在内核页表中寻找最后一个未使用的用户态映射虚拟地址
+ * 地址范围：0 -- MAX_UVA_KERNEL
+ */
+uint64 find_last_valid_va(pagetable_t kernel_pagetable)
+{
+    pte_t *pte;
+    uint64 va;
+
+    for (va = MAX_UVA_KERNEL - PGSIZE; va >= 0; va -= PGSIZE) {
+        pte = walk(kernel_pagetable, va, 0);
+        if (pte == 0)
+            return va;
+        if ((*pte & PTE_V) == 0)
+            return va;
+    }
+
+    return INVALID_VA;
+}
+
+/*
+ * 以 old_va 为虚拟地址, 将 PGSIZE 的数据拷贝到 new_va
+ *
+ * old_va: 待拷贝数据的虚拟地址
+ * old_pagetable: old_va 对应的页表
+ * new_va: 存放数据的虚拟地址, 需分配内存
+ * new_pagetable: new_va 对应的页表
+ * current_pagetable: 当前使用的页表
+ *
+ * 1. 计算得到 old_va 对应的物理地址 old_pa, 为 new_va 分配对应的一个 PAGE
+ * 2. 将 old_pa, new_pa 分别映射到 current_pagetable
+ * 3. 拷贝数据
+ * 4. 取消 current_pagetable 对 old_pa, new_pa 的映射
+ * 5. 添加 new_pagetable 对 new_va 和 new_pa 的映射
+ */
+int copy_data_across_pagetable(uint64 old_va, pagetable_t old_pagetable, 
+        uint64 new_va, pagetable_t new_pagetable, pagetable_t current_pagetable)
+{
+    pte_t *pte;
+
+    uint64 cur_old_va, cur_new_va;
+    uint64 old_pa, new_pa;
+
+    /* step 1 */
+    pte = walk(old_pagetable, old_va, 0);
+    if (pte == 0) {
+        printf("[%s %d]\n", __func__, __LINE__);
+        return 1;
+    }
+    if ((*pte & PTE_V) == 0) {
+        printf("[%s %d]\n", __func__, __LINE__);
+        return 2;
+    }
+    old_pa = PTE2PA(*pte);
+
+    new_pa = (uint64)kalloc();
+    if (new_pa == 0) {
+        printf("[%s %d]\n", __func__, __LINE__);
+        return 3;
+    }
+
+    /* step 2 */
+    if (current_pagetable != old_pagetable) {
+        cur_old_va = find_last_valid_va(current_pagetable);
+        if (cur_old_va == INVALID_VA) {
+            printf("[%s %d]\n", __func__, __LINE__);
+            return 4;
+        }
+        if (mappages(current_pagetable, cur_old_va, PGSIZE, (uint64)old_pa, PTE_W|PTE_X|PTE_R) != 0) {
+            printf("[%s %d]\n", __func__, __LINE__);
+            return 5;
+        }
+    } else
+        cur_old_va = old_va;
+
+    cur_new_va = find_last_valid_va(current_pagetable);
+    if (cur_new_va == INVALID_VA) {
+        printf("[%s %d]\n", __func__, __LINE__);
+        return 6;
+    }
+    if (mappages(current_pagetable, cur_new_va, PGSIZE, (uint64)new_pa, PTE_W|PTE_X|PTE_R) != 0) {
+        printf("[%s %d]\n", __func__, __LINE__);
+        return 7;
+    }
+
+    /* step 3 */
+    memmove((void *)cur_new_va, (void *)cur_old_va, PGSIZE);
+
+    /* step 4 */
+    if (current_pagetable != old_pagetable)
+        uvmunmap(current_pagetable, cur_old_va, 1, 0);      //not free
+    uvmunmap(current_pagetable, cur_new_va, 1, 0);          //not free
+
+    /* step 5 */
+    if ((mappages(new_pagetable, new_va, PGSIZE, new_pa, PTE_W|PTE_X|PTE_R) != 0)) {
+        printf("[%s %d]\n", __func__, __LINE__);
+        uvmunmap(new_pagetable, new_va, 1, 0);      //not free
+        return 8;
+    }
+
+    return 0;
 }

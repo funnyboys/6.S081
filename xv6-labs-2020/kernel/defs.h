@@ -93,6 +93,8 @@ int             fork(void);
 int             growproc(int);
 pagetable_t     proc_pagetable(struct proc *);
 void            proc_freepagetable(pagetable_t, uint64);
+pagetable_t     proc_k_pagetable(struct proc *);
+void            proc_free_k_pagetable(pagetable_t, uint64);
 int             kill(int);
 struct cpu*     mycpu(void);
 struct cpu*     getmycpu(void);
@@ -162,12 +164,13 @@ void            uartputc_sync(int);
 int             uartgetc(void);
 
 // vm.c
-void            kvminit(void);
-void            kvminit_new(pagetable_t);
-void            kvmfree_new(pagetable_t pagetable);
+void            kvminit(pagetable_t);
+void            kvmuninit(pagetable_t);
+pte_t           *walk(pagetable_t, uint64, int);
+
 void            freewalk(pagetable_t);
 
-void            kvminithart(void);
+void            kvminithart(pagetable_t);
 uint64          kvmpa(uint64);
 void            kvmmap(uint64, uint64, uint64, int);
 int             mappages(pagetable_t, uint64, uint64, uint64, int);
@@ -187,6 +190,10 @@ int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
 void            vmprint(pagetable_t pagetable);
+uint64          find_last_valid_va(pagetable_t);
+void            unmap_uva_in_kpgt(pagetable_t, uint64, uint64, int);
+int             copy_data_across_pagetable(uint64, pagetable_t, uint64, pagetable_t, pagetable_t);
+
 
 // plic.c
 void            plicinit(void);
@@ -232,3 +239,6 @@ int             sockread(struct sock *, uint64, int);
 int             sockwrite(struct sock *, uint64, int);
 void            sockrecvudp(struct mbuf*, uint32, uint16, uint16);
 #endif
+
+// vmcopyin.c
+int             copyin_new(pagetable_t, char *, uint64, uint64);

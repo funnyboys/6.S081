@@ -39,6 +39,7 @@ exec(char *path, char **argv)
     goto bad;
 
   // Load program into memory.
+  // 加载ELF文件的 text 和 data 段(va从0开始)
   for(i=0, off=elf.phoff; i<elf.phnum; i++, off+=sizeof(ph)){
     if(readi(ip, 0, (uint64)&ph, off, sizeof(ph)) != sizeof(ph))
       goto bad;
@@ -66,13 +67,17 @@ exec(char *path, char **argv)
 
   // Allocate two pages at the next page boundary.
   // Use the second as the user stack.
+  // first page: guard page
+  // second page: stack
   sz = PGROUNDUP(sz);
   uint64 sz1;
   if((sz1 = uvmalloc(pagetable, sz, sz + 2*PGSIZE)) == 0)
     goto bad;
+  
   sz = sz1;
   uvmclear(pagetable, sz-2*PGSIZE);
-  sp = sz;
+  sp = sz;      //the second page is stack, sp指向栈的高地址
+  // 栈起始地址
   stackbase = sp - PGSIZE;
 
   // Push argument strings, prepare rest of stack in ustack.
@@ -118,6 +123,16 @@ exec(char *path, char **argv)
 
   if(p->pid==1)
     vmprint(p->pagetable);
+
+  /* 清空在内核页表中之前映射的用户态空间 */
+  unmap_uva_in_kpgt(p->k_pagetable, 0, MAX_UVA_KERNEL/PGSIZE, 1);
+
+  /* 重新映射用户态 stack */
+  // stack_base = p->sz - PGSIZE
+  if (copy_data_across_pagetable(p->sz - PGSIZE, p->pagetable, p->sz - PGSIZE, p->k_pagetable, p->k_pagetable))
+    printf("[%s %d]\n", __func__, __LINE__);
+
+  sfence_vma();
 
   return argc; // this ends up in a0, the first argument to main(argc, argv)
 
