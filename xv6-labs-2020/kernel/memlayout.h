@@ -67,4 +67,4 @@
 #define TRAPFRAME (TRAMPOLINE - PGSIZE)
 
 // max user virtual address in kernel page table(not used)
-#define MAX_UVA_KERNEL  (CLINT)
+#define MAX_UVA_KERNEL  (PLIC)

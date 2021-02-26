@@ -94,7 +94,7 @@ int             growproc(int);
 pagetable_t     proc_pagetable(struct proc *);
 void            proc_freepagetable(pagetable_t, uint64);
 pagetable_t     proc_k_pagetable(struct proc *);
-void            proc_free_k_pagetable(pagetable_t, uint64);
+void            proc_free_k_pagetable(struct proc *);
 int             kill(int);
 struct cpu*     mycpu(void);
 struct cpu*     getmycpu(void);
@@ -191,7 +191,8 @@ int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
 void            vmprint(pagetable_t pagetable);
 uint64          find_last_valid_va(pagetable_t);
-void            unmap_uva_in_kpgt(pagetable_t, uint64, uint64, int);
+int             map_uva_in_kpgt(pagetable_t, pagetable_t, uint64, uint64);
+void            unmap_uva_in_kpgt(pagetable_t, uint64, uint64);
 int             copy_data_across_pagetable(uint64, pagetable_t, uint64, pagetable_t, pagetable_t, int);
 
 
@@ -242,3 +243,4 @@ void            sockrecvudp(struct mbuf*, uint32, uint16, uint16);
 
 // vmcopyin.c
 int             copyin_new(pagetable_t, char *, uint64, uint64);
+int             copyinstr_new(pagetable_t, char *, uint64, uint64);

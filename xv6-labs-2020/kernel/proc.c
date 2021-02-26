@@ -93,41 +93,14 @@ pagetable_t proc_k_pagetable(struct proc *p)
 
 // Free a process's kernel page table, and free the
 // physical memory it refers to.
-void proc_free_k_pagetable(pagetable_t k_pagetable, uint64 kstack)
+void proc_free_k_pagetable(struct proc *p)
 {
-  kvmuninit(k_pagetable);
-  uvmunmap(k_pagetable, kstack, 1, 1);
-  unmap_uva_in_kpgt(k_pagetable, 0, MAX_UVA_KERNEL/PGSIZE, 1);
+    kvmuninit(p->k_pagetable);
+    /* unmap and free kernel stack */
+    uvmunmap(p->k_pagetable, p->kstack, 1, 1);
+    unmap_uva_in_kpgt(p->k_pagetable, 0, PGROUNDUP(p->sz)/PGSIZE);
 
-  freewalk(k_pagetable);
-}
-
-/*
- * 由于其它部分相同，因此只拷贝用户态映射的内容
- */
-void copy_kernel_pagetable(struct proc *old, struct proc *new)
-{
-    uint64 va;
-
-    /* 清空在内核页表中之前映射的用户态空间 */
-    unmap_uva_in_kpgt(new->k_pagetable, 0, MAX_UVA_KERNEL/PGSIZE, 1);
-
-    todo:
-        1. stack和heap需要单独拷贝
-        2. stack之前只需要重新映射，不能释放内存
-
-    for (va = 0; va < MAX_UVA_KERNEL; va += PGSIZE) {
-        pte_t *pte = walk(old->k_pagetable, va, 0);
-        if (pte == 0)
-            continue;
-        if ((*pte & PTE_V) == 0)
-            continue;
-
-        if (copy_data_across_pagetable(va, old->k_pagetable, va, new->k_pagetable, old->k_pagetable, PTE_W|PTE_X|PTE_R))
-            printf("[%s %d]\n", __func__, __LINE__);
-    }
-
-    sfence_vma();
+    freewalk(p->k_pagetable);
 }
 
 int
@@ -181,6 +154,7 @@ found:
   // set kernel page table.
   p->k_pagetable = proc_k_pagetable(p);
   if (p->k_pagetable == 0){
+    printf("[%s %d] proc_k_pagetable fail!\n", __func__, __LINE__);
     freeproc(p);
     release(&p->lock);
     return 0;
@@ -208,7 +182,7 @@ freeproc(struct proc *p)
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
   if(p->k_pagetable)
-    proc_free_k_pagetable(p->k_pagetable, p->kstack);
+    proc_free_k_pagetable(p);
   p->pagetable = 0;
   p->k_pagetable = 0;
   p->sz = 0;
@@ -290,6 +264,9 @@ userinit(void)
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
 
+  if (map_uva_in_kpgt(p->pagetable, p->k_pagetable, 0, 1))
+    panic("map initcode in kernel pagetable fail!\n");
+
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
@@ -307,37 +284,36 @@ userinit(void)
 int
 growproc(int n)
 {
-    uint oldsz, newsz, sz;
-    uint64 va, pa;
+    uint sz, oldsz, newsz, npages;
     struct proc *p = myproc();
-    pte_t *pte;
-
-    oldsz = sz = p->sz;
-    if(n > 0){
+    sz = p->sz;
+    oldsz = PGROUNDUP(sz);
+    newsz = PGROUNDUP(sz + n);
+    if (newsz >= MAX_UVA_KERNEL) {
+        printf("[%s %d] sz = %p, oldsz = %p, newsz = %p\n", __func__, __LINE__, sz, oldsz, newsz);
+        return -1;
+    }
+    if (n > 0) {
         if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
+            printf("[%s %d] uvmalloc fail!, sz = %d, n = %d\n", __func__, __LINE__, sz, n);
             return -1;
         }
-        newsz = sz;
-        if (newsz != oldsz) {
-            for (va = PGROUNDUP(oldsz); va < oldsz; va += PGSIZE) {
-                pte = walk(p->pagetable, va, 0);
-                pa = PTE2PA(*pte);
-                if (mappages(p->k_pagetable, va, PGSIZE, pa, PTE_W|PTE_X|PTE_R) != 0) {
-                    printf("[%s %d]\n", __func__, __LINE__);
-                    return -2;
-                }
+        if (newsz > oldsz) {
+            npages = (newsz - oldsz) / PGSIZE;
+            if (map_uva_in_kpgt(p->pagetable, p->k_pagetable, oldsz, npages)) {
+                printf("[%s %d] map_uva_in_kpgt fail!, sz = %d, n = %d\n", __func__, __LINE__, sz, n);
+                return -1;
             }
         }
-    } else if(n < 0){
+    } else if (n < 0) {
         sz = uvmdealloc(p->pagetable, sz, sz + n);
-        newsz = sz;
-        
-        if (PGROUNDUP(newsz) < PGROUNDUP(oldsz)) {
-            int npages = (PGROUNDUP(oldsz) - PGROUNDUP(newsz)) / PGSIZE;
-            uvmunmap(p->k_pagetable, PGROUNDUP(newsz), npages, 0);
+        if (newsz < oldsz) {
+            npages = (oldsz - newsz) / PGSIZE;
+            uvmunmap(p->k_pagetable, newsz, npages, 0);
         }
     }
     p->sz = sz;
+
     return 0;
 }
 
@@ -363,8 +339,9 @@ fork(void)
   }
   np->sz = p->sz;
 
-  // Copy kernel pagetable from parent to child.
-  copy_kernel_pagetable(p, np);
+  /* 重新映射内核页表中的用户态地址信息 */
+  if (map_uva_in_kpgt(np->pagetable, np->k_pagetable, 0, PGROUNDUP(np->sz)/PGSIZE))
+    printf("[%s %d]\n", __func__, __LINE__);
 
   np->parent = p;
 
@@ -568,9 +545,16 @@ scheduler(void)
         p->state = RUNNING;
         c->proc = p;
 
-        w_satp(MAKE_SATP(p->k_pagetable));
-        sfence_vma();
+        kvminithart(p->k_pagetable);
+
         swtch(&c->context, &p->context);
+
+        /*
+         * scheduler()只在cpu启动时调用, 从 swtch() 退出后
+         * 只有公用的 kernel_pagetable 是有效的
+         */
+        kvminithart(kernel_pagetable);
+
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
@@ -581,10 +565,9 @@ scheduler(void)
       release(&p->lock);
     }
 
-    if(found == 0) {
-      w_satp(MAKE_SATP(kernel_pagetable));
-      sfence_vma();
-    }
+    if (found == 0)
+        kvminithart(kernel_pagetable);
+    
 
 #if !defined (LAB_FS)
     if(found == 0) {

@@ -28,8 +28,18 @@ void kvminit(pagetable_t pagetable)
   // virtio mmio disk interface
   mappages(pagetable, VIRTIO0, PGSIZE, VIRTIO0, PTE_R | PTE_W);
 
+  /* 
+   * CLINT 相关地址在两个地方使用: timerinit() 和 timervec()
+   *    start() -> timerinit(): 初始化 timer 中断(在machine mode初始化)
+   *    timervec(): timer 中断处理程序(在machine mode下处理)
+   * 而 machine mode 不支持 paging, 直接访问物理地址
+   * 所以内核中不需要对 CLINT 进行映射
+   * 因此内核虚拟地址的低地址为 PLIC 而不是 CLINT
+   */
+#if 0
   // CLINT
   mappages(pagetable, CLINT, 0x10000, CLINT, PTE_R | PTE_W);
+#endif
 
   // PLIC
   mappages(pagetable, PLIC, 0x400000, PLIC, PTE_R | PTE_W);
@@ -51,7 +61,10 @@ void kvmuninit(pagetable_t pagetable)
 
   uvmunmap(pagetable, VIRTIO0, PGSIZE/PGSIZE, 0);
 
+  /* 参考 kvminit() 中的注释 */
+#if 0
   uvmunmap(pagetable, CLINT, 0x10000/PGSIZE, 0);
+#endif
 
   uvmunmap(pagetable, PLIC, 0x400000/PGSIZE, 0);
 
@@ -398,7 +411,7 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 int
 copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
-#if 1
+#if 0
   uint64 n, va0, pa0;
 
   while(len > 0){
@@ -428,6 +441,7 @@ copyin(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 int
 copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
 {
+#if 0
   uint64 n, va0, pa0;
   int got_null = 0;
 
@@ -462,6 +476,9 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+#else
+  return copyinstr_new(pagetable, dst, srcva, max);
+#endif
 }
 
 /* 这里 %p 类似 0x%x 直接打印十六进制 */
@@ -496,20 +513,65 @@ void vmprint(pagetable_t pagetable)
     print_pagetable(pagetable, &depth);
 }
 
-/* unmap 内核页表中的用户态地址映射信息 */
-void unmap_uva_in_kpgt(pagetable_t k_pagetable, uint64 va, uint64 npages, int do_free)
+/*
+ * 将旧页表中的地址映射到内核页表中
+ * 内核页表中虚拟地址与用户态页表下使用的相同
+ * 只映射地址，不再单独分配内存
+ */
+int map_uva_in_kpgt(pagetable_t old_pagetable, pagetable_t kernel_pagetable, uint64 va, uint64 npages)
 {
-    uint64 i;
+    int flags;
+    uint64 i, pa;
+    pte_t *pte;
+
+    if ((va % PGSIZE) != 0) {
+        printf("uvmunmap: va is not aligned, va = %p\n", va);
+        return 1;
+    }
+
     for (i = 0; i < npages; i++, va += PGSIZE) {
         if (va >= MAX_UVA_KERNEL)
             break;
-        pte_t *pte = walk(k_pagetable, va, 0);
+        pte = walk(old_pagetable, va, 0);
+        if (pte == 0)
+            continue;
+        if ((*pte & PTE_V) == 0)
+            continue;
+        pa = PTE2PA(*pte);
+        flags = PTE_FLAGS(*pte);
+        flags &= (~PTE_U);
+        if (mappages(kernel_pagetable, va, PGSIZE, pa, flags) != 0) {
+            printf("[%s %d] va is %p, pa is %p\n", __func__, __LINE__, va, pa);
+            return 1;
+        }
+    }
+
+    return 0;
+}
+
+/*
+ * unmap 内核页表中的用户态地址映射信息
+ * 自动跳过未映射的虚拟地址
+ */
+void unmap_uva_in_kpgt(pagetable_t kernel_pagetable, uint64 va, uint64 npages)
+{
+    uint64 i;
+
+    if ((va % PGSIZE) != 0) {
+        printf("unmap_uva_in_kpgt: va is not aligned, va = %p\n", va);
+        return;
+    }
+
+    for (i = 0; i < npages; i++, va += PGSIZE) {
+        if (va >= MAX_UVA_KERNEL)
+            break;
+        pte_t *pte = walk(kernel_pagetable, va, 0);
         if (pte == 0)
             continue;
         if ((*pte & PTE_V) == 0)
             continue;
         
-        uvmunmap(k_pagetable, va, 1, do_free);
+        uvmunmap(kernel_pagetable, va, 1, 0);
     }
 }
 

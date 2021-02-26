@@ -29,42 +29,13 @@ statscopyin(char *buf, int sz) {
 int
 copyin_new(pagetable_t pagetable, char *dst, uint64 srcva, uint64 len)
 {
-    uint64 pa;
-    pte_t *pte;
-    struct proc *p = myproc();
+  struct proc *p = myproc();
 
-    if (srcva >= p->sz || srcva+len >= p->sz || srcva+len < srcva)
-        return -1;
-
-    pte = walk(pagetable, srcva, 0);
-    pa = PTE2PA(*pte);
-
-    printf("[%s %d] pa is %p\n", __func__, __LINE__, pa);
-    printf("[%s %d] r_satp is %p\n", __func__, __LINE__, r_satp());
-    printf("[%s %d] pagetable is %p\n", __func__, __LINE__, pagetable);
-    printf("[%s %d] p->pagetable is %p\n", __func__, __LINE__, MAKE_SATP(p->pagetable));
-    printf("[%s %d] p->k_pagetable is %p\n", __func__, __LINE__, MAKE_SATP(p->k_pagetable));
-    printf("[%s %d] dst is %p, srcva is %p\n", __func__, __LINE__, dst, srcva);
-    vmprint(p->k_pagetable);
-    pte = walk(p->k_pagetable, srcva, 0);
-    if (pte == 0)
-        printf("[%s %d] r_satp is %p\n", __func__, __LINE__, r_satp());
-    if ((*pte & PTE_V) == 0)
-        printf("[%s %d] r_satp is %p\n", __func__, __LINE__, r_satp());
-    if ((*pte & PTE_U) == 0)
-        printf("[%s %d] r_satp is %p\n", __func__, __LINE__, r_satp());
-
-    pte = walk(p->k_pagetable, (uint64)dst, 0);
-    if (pte == 0)
-        printf("[%s %d] r_satp is %p\n", __func__, __LINE__, r_satp());
-    if ((*pte & PTE_V) == 0)
-        printf("[%s %d] r_satp is %p\n", __func__, __LINE__, r_satp());
-    if ((*pte & PTE_U) == 0)
-        printf("[%s %d] r_satp is %p\n", __func__, __LINE__, r_satp());
-
-    memmove((void *) dst, (void *)srcva, len);
-    stats.ncopyin++;   // XXX lock
-    return 0;
+  if (srcva >= p->sz || srcva+len >= p->sz || srcva+len < srcva)
+    return -1;
+  memmove((void *) dst, (void *)srcva, len);
+  stats.ncopyin++;   // XXX lock
+  return 0;
 }
 
 // Copy a null-terminated string from user to kernel.
