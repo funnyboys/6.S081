@@ -1,3 +1,4 @@
 #LAB=util
 #LAB=syscall
-LAB=pgtbl
+#LAB=pgtbl
+LAB=traps

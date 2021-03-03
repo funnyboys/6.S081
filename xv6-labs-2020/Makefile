@@ -203,12 +203,6 @@ UPROGS += \
 	$U/_bttest
 endif
 
-ifeq ($(LAB),trap)
-UPROGS += \
-	$U/_call\
-	$U/_alarmtest
-endif
-
 ifeq ($(LAB),lazy)
 UPROGS += \
 	$U/_lazytests
