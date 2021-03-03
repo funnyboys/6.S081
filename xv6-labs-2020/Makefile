@@ -36,15 +36,12 @@ OBJS = \
   $K/kernelvec.o \
   $K/plic.o \
   $K/virtio_disk.o \
-
-ifeq ($(LAB),pgtbl)
-OBJS += $K/vmcopyin.o
-endif
+  $K/vmcopyin.o \
+  $K/sprintf.o \
 
 ifeq ($(LAB),$(filter $(LAB), pgtbl lock))
 OBJS += \
 	$K/stats.o\
-	$K/sprintf.o
 endif
 
 
