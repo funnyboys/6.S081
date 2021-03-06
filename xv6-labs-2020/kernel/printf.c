@@ -121,6 +121,7 @@ panic(char *s)
   printf("panic: ");
   printf(s);
   printf("\n");
+  backtrace();
   panicked = 1; // freeze uart output from other CPUs
   for(;;)
     ;
@@ -131,4 +132,29 @@ printfinit(void)
 {
   initlock(&pr.lock, "pr");
   pr.locking = 1;
+}
+
+void backtrace(void)
+{
+    uint64 fp, ra;
+    uint64 stack_top_addr, stack_bottom_addr;
+
+    /* r_fp() */
+    asm volatile("mv %0, s0" : "=r" (fp) );
+
+    /*
+     * xv6 栈向下生长，进程栈的总大小为一个 PGSIZE
+     * 栈顶位于低地址，栈底位于高地址
+     */
+    stack_top_addr = PGROUNDDOWN(fp);   // 栈顶位于低地址
+    stack_bottom_addr = PGROUNDUP(fp);  // 栈底位于高地址
+
+    printf("backtrace:\n");
+    while (fp > stack_top_addr && fp < stack_bottom_addr)
+    {
+        ra = *(uint64 *)(fp - 8);
+        fp = *(uint64 *)(fp - 16);
+        printf("%p\n", ra);
+        //printf("ra = %p, fp = %p\n", ra, fp);
+    }
 }

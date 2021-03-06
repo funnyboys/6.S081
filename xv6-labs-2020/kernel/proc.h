@@ -84,25 +84,31 @@ enum procstate { UNUSED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
 
 // Per-process state
 struct proc {
-  struct spinlock lock;
+    struct spinlock lock;
 
-  // p->lock must be held when using these:
-  enum procstate state;        // Process state
-  struct proc *parent;         // Parent process
-  void *chan;                  // If non-zero, sleeping on chan
-  int killed;                  // If non-zero, have been killed
-  int xstate;                  // Exit status to be returned to parent's wait
-  int pid;                     // Process ID
+    // p->lock must be held when using these:
+    enum procstate state;               // Process state
+    struct proc *parent;                // Parent process
+    void *chan;                         // If non-zero, sleeping on chan
+    int killed;                         // If non-zero, have been killed
+    int xstate;                         // Exit status to be returned to parent's wait
+    int pid;                            // Process ID
 
-  // these are private to the process, so p->lock need not be held.
-  uint64 kstack;               // Virtual address of kernel stack
-  uint64 sz;                   // Size of process memory (bytes)
-  pagetable_t pagetable;       // User page table
-  pagetable_t k_pagetable;     // kernel page table
-  struct trapframe *trapframe; // data page for trampoline.S
-  struct context context;      // swtch() here to run process
-  struct file *ofile[NOFILE];  // Open files
-  struct inode *cwd;           // Current directory
-  char name[16];               // Process name (debugging)
-  int syscall_nr_mask;         // syscall nr mask
+    // these are private to the process, so p->lock need not be held.
+    uint64 kstack;                      // Virtual address of kernel stack
+    uint64 sz;                          // Size of process memory (bytes)
+    pagetable_t pagetable;              // User page table
+    pagetable_t k_pagetable;            // kernel page table
+    struct trapframe *trapframe;        // data page for trampoline.S
+    struct context context;             // swtch() here to run process
+    struct file *ofile[NOFILE];         // Open files
+    struct inode *cwd;                  // Current directory
+    char name[16];                      // Process name (debugging)
+    int syscall_nr_mask;                // syscall nr mask
+
+    int nr_ticks;                       // n ticks that process consumes
+    int nr_alarm_ticks;                 // nr ticks for alarm handler
+    uint64 (*alarm_handler)(void);      // handler for alarm
+    int in_alarm_handler;               // If non-zero, handler is not returned
+    struct trapframe saved_trapframe;   // resume trapframe when alarm interrupted
 };

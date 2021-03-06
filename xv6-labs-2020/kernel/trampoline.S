@@ -24,7 +24,7 @@ uservec:
         # mapped into user space, at TRAPFRAME.
         #
         
-	# swap a0 and sscratch
+        # swap a0 and sscratch
         # so that a0 is TRAPFRAME
         csrrw a0, sscratch, a0
 
@@ -93,11 +93,14 @@ userret:
         # a1: user page table, for satp.
 
         # switch to the user page table.
+        # a1 = satp = MAKE_SATP(p->pagetable);
         csrw satp, a1
         sfence.vma zero, zero
 
         # put the saved user a0 in sscratch, so we
         # can swap it with our a0 (TRAPFRAME) in the last step.
+        # 将 a0 + 112 的值 load 到寄存器 t0 中
+        #    a0 = 用户态的TRAPFRAME
         ld t0, 112(a0)
         csrw sscratch, t0
 

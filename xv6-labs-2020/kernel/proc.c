@@ -165,7 +165,13 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+
   p->syscall_nr_mask = 0;
+  p->nr_ticks = 0;
+  p->nr_alarm_ticks = 0;
+  p->alarm_handler = 0;
+  p->in_alarm_handler = 0;
+  memset(&p->saved_trapframe, 0, sizeof(p->saved_trapframe));
 
   return p;
 }
@@ -192,6 +198,12 @@ freeproc(struct proc *p)
   p->chan = 0;
   p->killed = 0;
   p->xstate = 0;
+  p->syscall_nr_mask = 0;
+  p->nr_ticks = 0;
+  p->nr_alarm_ticks = 0;
+  p->alarm_handler = 0;
+  p->in_alarm_handler = 0;
+  memset(&p->saved_trapframe, 0, sizeof(p->saved_trapframe));
   p->state = UNUSED;
 }
 
@@ -358,6 +370,11 @@ fork(void)
   np->cwd = idup(p->cwd);
 
   np->syscall_nr_mask = p->syscall_nr_mask;
+  np->nr_ticks = 0;
+  np->nr_alarm_ticks = p->nr_alarm_ticks;
+  np->alarm_handler = p->alarm_handler;
+  p->in_alarm_handler = 0;
+  memset(&p->saved_trapframe, 0, sizeof(p->saved_trapframe));
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 

@@ -106,6 +106,9 @@ extern uint64 sys_write(void);
 extern uint64 sys_uptime(void);
 extern uint64 sys_trace(void);
 extern uint64 sys_sysinfo(void);
+extern uint64 sys_sigalarm(void);
+extern uint64 sys_sigreturn(void);
+
 
 typedef struct syscall_struct {
     int num;
@@ -138,6 +141,8 @@ syscall_struct syscalls[MAX_SYS_NUM] = {
     {SYS_close, "close", sys_close},
     {SYS_trace, "trace", sys_trace},
     {SYS_sysinfo, "sysinfo", sys_sysinfo},
+    {SYS_sigalarm, "sigalarm", sys_sigalarm},
+    {SYS_sigreturn, "sigreturn", sys_sigreturn},
 };
 
 void

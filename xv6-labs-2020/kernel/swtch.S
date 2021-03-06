@@ -7,6 +7,7 @@
 
 .globl swtch
 swtch:
+# 将ra的值保存到 a0 + 0 地址中
         sd ra, 0(a0)
         sd sp, 8(a0)
         sd s0, 16(a0)

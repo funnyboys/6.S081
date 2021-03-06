@@ -72,6 +72,7 @@ sys_sleep(void)
     sleep(&ticks, &tickslock);
   }
   release(&tickslock);
+  backtrace();
   return 0;
 }
 
@@ -137,4 +138,41 @@ uint64 sys_sysinfo(void)
     k_info.nproc = get_nr_proc();
 
     return copyout(p->pagetable, info, (char *)&k_info, sizeof(k_info));
+}
+
+uint64 sys_sigalarm(void)
+{
+    int ticks;
+    struct proc *p = myproc();
+    uint64 alarm_handler = 0;
+
+    if (argint(0, &ticks) < 0 || argaddr(1, &alarm_handler) < 0)
+        return -1;
+
+    acquire(&p->lock);
+    p->nr_alarm_ticks = ticks;
+    p->alarm_handler = (uint64 (*)(void))alarm_handler;
+    p->in_alarm_handler = 0;
+    release(&p->lock);
+
+    
+    printf("ticks = %d, alarm_handler = %p\n", ticks, alarm_handler);
+
+    return 0;
+}
+
+extern void resume_trapframe(struct proc *p, struct trapframe *frame);
+uint64 sys_sigreturn(void)
+{
+    struct proc *p = myproc();
+
+    printf("p->saved_epc = %p\n", p->saved_trapframe.epc);
+
+    acquire(&p->lock);
+    resume_trapframe(p, &p->saved_trapframe);
+    p->in_alarm_handler = 0;
+    p->trapframe->epc = p->saved_trapframe.epc;
+    release(&p->lock);
+
+    return 0;
 }

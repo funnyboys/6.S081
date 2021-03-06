@@ -29,6 +29,9 @@ int connect(uint32, uint16, uint16);
 #endif
 int trace(int mask);
 int sysinfo(struct sysinfo *);
+int sigalarm(int ticks, void (*handler)());
+int sigreturn(void);
+
 
 // ulib.c
 int stat(const char*, struct stat*);
