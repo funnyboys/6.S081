@@ -36,7 +36,10 @@ trapinithart(void)
 void
 usertrap(void)
 {
+  char *mem;
+  uint64 va, pa, flags;
   int which_dev = 0;
+  pte_t *pte;
 
   if((r_sstatus() & SSTATUS_SPP) != 0)
     panic("usertrap: not from user mode");
@@ -49,7 +52,8 @@ usertrap(void)
   
   // save user program counter.
   p->trapframe->epc = r_sepc();
-  
+
+  va = r_stval();
   if(r_scause() == 8){
     // system call
 
@@ -67,12 +71,60 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
+  } else if(r_scause() == 12 || r_scause() == 13 || r_scause() == 15) {
+
+    // check pte
+    if ((pte = walk(p->pagetable, va, 0)) == 0) {
+        printf("[%s %d] walk fail, va = %p!\n", __func__, __LINE__, va);
+        p->killed = 1;
+        goto exit;
+    }
+    if ((*pte & PTE_COW) == 0) {
+        printf("[%s %d] not cow, *pte = %p, pa = %p!\n", __func__, __LINE__, *pte, PTE2PA(*pte));
+        p->killed = 1;
+        goto exit;
+    }
+    if ((*pte & PTE_V) == 0) {
+        printf("[%s %d] not valid, *pte = %p, pa = %p!\n", __func__, __LINE__, *pte, PTE2PA(*pte));
+        p->killed = 1;
+        goto exit;
+    }
+    if ((*pte & PTE_U) == 0) {
+        printf("[%s %d] not user, *pte = %p, pa = %p!\n", __func__, __LINE__, *pte, PTE2PA(*pte));
+        p->killed = 1;
+        goto exit;
+    }
+
+
+    // alloc new page
+    if (0 == (mem = kalloc())) {
+        printf("[%s %d] no mem in cow_page_handler!\n", __func__, __LINE__);
+        p->killed = 1;
+        goto exit;
+    }
+    memset(mem, 0, PGSIZE);
+
+    // copy data to new page
+    pa = PTE2PA(*pte);
+    memmove(mem, (char *)pa, PGSIZE);
+
+    // update pte point to new page
+    flags = PTE_FLAGS(*pte);
+    flags &= (~PTE_COW);
+    flags |= PTE_W;
+    *pte = PA2PTE(mem) | flags | PTE_V;
+
+    // kfree old mem
+    kfree((void *)pa);
+
   } else {
     printf("usertrap(): unexpected scause %p pid=%d\n", r_scause(), p->pid);
     printf("            sepc=%p stval=%p\n", r_sepc(), r_stval());
     p->killed = 1;
+    print_pte_info(p, r_stval());
   }
 
+exit:
   if(p->killed)
     exit(-1);
 

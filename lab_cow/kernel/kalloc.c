@@ -23,6 +23,21 @@ struct {
   struct run *freelist;
 } kmem;
 
+int page_referance[MAX_PAGE_NR] = {0};
+#define PA2PFN(pa) (((uint64)pa - KERNBASE) >> 12)
+
+void inc_page_referance(uint64 pa)
+{
+    page_referance[PA2PFN(pa)]++;
+}
+
+void dec_page_referance(uint64 pa)
+{
+    page_referance[PA2PFN(pa)]--;
+    if (page_referance[PA2PFN(pa)] < 0)
+        printf("pa = %p, count = %d\n", pa, page_referance[PA2PFN(pa)]);
+}
+
 void
 kinit()
 {
@@ -30,13 +45,16 @@ kinit()
   freerange(end, (void*)PHYSTOP);
 }
 
+static int in_freerange = 0;
 void
 freerange(void *pa_start, void *pa_end)
 {
   char *p;
   p = (char*)PGROUNDUP((uint64)pa_start);
+  in_freerange = 1;
   for(; p + PGSIZE <= (char*)pa_end; p += PGSIZE)
     kfree(p);
+  in_freerange = 0;
 }
 
 // Free the page of physical memory pointed at by v,
@@ -47,9 +65,19 @@ void
 kfree(void *pa)
 {
   struct run *r;
+  int count;
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
+
+  if (in_freerange == 0)
+    dec_page_referance((uint64)pa);
+
+  count = page_referance[PA2PFN((uint64)pa)];
+  if (count > 0)
+    return;
+  else if (count < 0)
+    printf("kfree error, pa = %p, count = %d\n", pa, count);
 
   // Fill with junk to catch dangling refs.
   memset(pa, 1, PGSIZE);
@@ -76,7 +104,9 @@ kalloc(void)
     kmem.freelist = r->next;
   release(&kmem.lock);
 
-  if(r)
+  if(r) {
     memset((char*)r, 5, PGSIZE); // fill with junk
+    page_referance[PA2PFN((uint64)r)] = 1;
+  }
   return (void*)r;
 }

@@ -5,6 +5,8 @@
 #include "riscv.h"
 #include "defs.h"
 #include "fs.h"
+#include "spinlock.h"
+#include "proc.h"
 
 /*
  * the kernel's page table.
@@ -308,31 +310,26 @@ uvmfree(pagetable_t pagetable, uint64 sz)
 int
 uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 {
-  pte_t *pte;
+  pte_t *pte, *new_pte;
   uint64 pa, i;
-  uint flags;
-  char *mem;
 
   for(i = 0; i < sz; i += PGSIZE){
     if((pte = walk(old, i, 0)) == 0)
       panic("uvmcopy: pte should exist");
     if((*pte & PTE_V) == 0)
       panic("uvmcopy: page not present");
+
     pa = PTE2PA(*pte);
-    flags = PTE_FLAGS(*pte);
-    if((mem = kalloc()) == 0)
-      goto err;
-    memmove(mem, (char*)pa, PGSIZE);
-    if(mappages(new, i, PGSIZE, (uint64)mem, flags) != 0){
-      kfree(mem);
-      goto err;
-    }
+    *pte = (*pte & (~PTE_W)) | PTE_COW;
+
+    if ((new_pte = walk(new, i, 1)) == 0)
+        panic("uvmcopy: new_pte should exist");
+    *new_pte = *pte;
+
+    inc_page_referance(pa);
   }
   return 0;
 
- err:
-  uvmunmap(new, 0, i / PGSIZE, 1);
-  return -1;
 }
 
 // mark a PTE invalid for user access.
@@ -354,13 +351,43 @@ uvmclear(pagetable_t pagetable, uint64 va)
 int
 copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
 {
-  uint64 n, va0, pa0;
+  char *mem;
+  uint64 n, va0, pa0, flags;
+  pte_t *pte = 0;
 
   while(len > 0){
     va0 = PGROUNDDOWN(dstva);
-    pa0 = walkaddr(pagetable, va0);
-    if(pa0 == 0)
-      return -1;
+    if (va0 > MAXVA) {
+        printf("[%s %d] va0 = %p\n", __func__, __LINE__, va0);
+        goto err;
+    }
+    pte = walk(pagetable, va0, 0);
+    if (pte == 0 || (*pte & PTE_V) == 0 || (*pte & PTE_U) == 0) {
+      printf("[%s %d] va0 = %p, pte = %p\n", __func__, __LINE__, va0, pte);
+      if (pte)
+          printf("[%s %d] *pte = %p\n", __func__, __LINE__, *pte);
+      goto err;
+    }
+
+    pa0 = PTE2PA(*pte);
+    if (*pte & PTE_COW) {
+      mem = kalloc();
+      if (mem == 0) {
+          printf("[%s %d] kalloc fail!\n", __func__, __LINE__);
+          goto err;
+      }
+      memset(mem, 0, PGSIZE);
+      flags = PTE_FLAGS(*pte);
+      flags |= PTE_W;
+      flags &= (~PTE_COW);
+      *pte = PA2PTE(mem) | flags | PTE_V;
+
+      // copy data to new page
+      memmove(mem, (void *)pa0, PGSIZE);
+
+      kfree((void *)pa0);
+      pa0 = (uint64)mem;
+    }
     n = PGSIZE - (dstva - va0);
     if(n > len)
       n = len;
@@ -371,6 +398,9 @@ copyout(pagetable_t pagetable, uint64 dstva, char *src, uint64 len)
     dstva = va0 + PGSIZE;
   }
   return 0;
+
+err:
+  return -1;
 }
 
 // Copy from user to kernel.
@@ -439,4 +469,47 @@ copyinstr(pagetable_t pagetable, char *dst, uint64 srcva, uint64 max)
   } else {
     return -1;
   }
+}
+
+void print_pte_info(struct proc *p, uint64 va)
+{
+    pte_t *pte;
+    if ((pte = walk(p->pagetable, va, 0)) == 0) {
+        printf("[%s %d] walk fail!\n", __func__, __LINE__);
+        return;
+    }
+
+    printf("[%s %d] pte is %p\n", __func__, __LINE__, *pte);
+}
+
+/* 这里 %p 类似 0x%x 直接打印十六进制 */
+static void print_pagetable(pagetable_t pagetable, int *depth)
+{
+    int i;
+    char *prefix[4] = {"..", ".. ..", ".. .. ..", ".. .. .. .."};
+    for (i = 0; i < 512; i++) {
+        pte_t *pte = &pagetable[i];
+        if (pte == 0)
+            continue;
+        if ((*pte & PTE_V) == 0)
+            continue;
+
+        printf("%s", prefix[*depth]);
+        if ((*pte & (PTE_R|PTE_W|PTE_X)) == 0) {
+            // this PTE points to a lower-level page table.
+            printf("%d: pte %p pa %p\n", i, *pte, PTE2PA(*pte));
+            *depth = *depth + 1;
+            print_pagetable((pagetable_t)(PTE2PA(*pte)), depth);
+        } else
+            printf("%d: pte %p pa %p\n", i, *pte, PTE2PA(*pte));
+
+    }
+    *depth = *depth - 1;
+}
+
+void vmprint(pagetable_t pagetable)
+{
+    int depth = 0;
+    printf("page table %p\n", pagetable);
+    print_pagetable(pagetable, &depth);
 }
