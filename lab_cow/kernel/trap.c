@@ -71,8 +71,13 @@ usertrap(void)
     syscall();
   } else if((which_dev = devintr()) != 0){
     // ok
-  } else if(r_scause() == 12 || r_scause() == 13 || r_scause() == 15) {
+  } else if(r_scause() == 15) {
 
+    if (va > p->sz) {
+        printf("[%s %d] va unvalid, va = %p!\n", __func__, __LINE__, va);
+        p->killed = 1;
+        goto exit;
+    }
     // check pte
     if ((pte = walk(p->pagetable, va, 0)) == 0) {
         printf("[%s %d] walk fail, va = %p!\n", __func__, __LINE__, va);
@@ -98,7 +103,7 @@ usertrap(void)
 
     // alloc new page
     if (0 == (mem = kalloc())) {
-        printf("[%s %d] no mem in cow_page_handler!\n", __func__, __LINE__);
+        printf("[%s %d] pa = %p, va = %p!\n", __func__, __LINE__, PTE2PA(*pte), va);
         p->killed = 1;
         goto exit;
     }

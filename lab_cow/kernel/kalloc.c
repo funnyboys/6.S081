@@ -28,9 +28,15 @@ int page_referance[MAX_PAGE_NR] = {0};
 
 void inc_page_referance(uint64 pa)
 {
+    acquire(&kmem.lock);
     page_referance[PA2PFN(pa)]++;
+    release(&kmem.lock);
 }
 
+/*
+ * only called by kfree()
+ * so do not need acuqire kmem.lock
+ */
 void dec_page_referance(uint64 pa)
 {
     page_referance[PA2PFN(pa)]--;
@@ -43,6 +49,7 @@ kinit()
 {
   initlock(&kmem.lock, "kmem");
   freerange(end, (void*)PHYSTOP);
+  printf("end = %p, stop = %p\n", end, PHYSTOP);
 }
 
 static int in_freerange = 0;
@@ -70,12 +77,16 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
+  acquire(&kmem.lock);
+
   if (in_freerange == 0)
     dec_page_referance((uint64)pa);
 
   count = page_referance[PA2PFN((uint64)pa)];
-  if (count > 0)
+  if (count > 0) {
+    release(&kmem.lock);
     return;
+  }
   else if (count < 0)
     printf("kfree error, pa = %p, count = %d\n", pa, count);
 
@@ -84,7 +95,6 @@ kfree(void *pa)
 
   r = (struct run*)pa;
 
-  acquire(&kmem.lock);
   r->next = kmem.freelist;
   kmem.freelist = r;
   release(&kmem.lock);
@@ -102,11 +112,12 @@ kalloc(void)
   r = kmem.freelist;
   if(r)
     kmem.freelist = r->next;
-  release(&kmem.lock);
 
   if(r) {
     memset((char*)r, 5, PGSIZE); // fill with junk
     page_referance[PA2PFN((uint64)r)] = 1;
   }
+  
+  release(&kmem.lock);
   return (void*)r;
 }

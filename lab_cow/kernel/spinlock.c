@@ -21,25 +21,31 @@ initlock(struct spinlock *lk, char *name)
 void
 acquire(struct spinlock *lk)
 {
-  push_off(); // disable interrupts to avoid deadlock.
-  if(holding(lk))
-    panic("acquire");
+    push_off(); // disable interrupts to avoid deadlock.
+    if (holding(lk))
+        panic("acquire");
 
-  // On RISC-V, sync_lock_test_and_set turns into an atomic swap:
-  //   a5 = 1
-  //   s1 = &lk->locked
-  //   amoswap.w.aq a5, a5, (s1)
-  while(__sync_lock_test_and_set(&lk->locked, 1) != 0)
-    ;
+    // On RISC-V, sync_lock_test_and_set turns into an atomic swap:
+    //   a5 = 1
+    //   s1 = &lk->locked
+    //   amoswap.w.aq a5, a5, (s1)
+    /*
+     * 保存 lk->locked 之前的值
+     * 将 lk->locked 赋值为 1
+     * 返回保存的 lk->locked 旧值
+     */
+    // try lock until success
+    while(__sync_lock_test_and_set(&lk->locked, 1) != 0)
+        ;
 
-  // Tell the C compiler and the processor to not move loads or stores
-  // past this point, to ensure that the critical section's memory
-  // references happen strictly after the lock is acquired.
-  // On RISC-V, this emits a fence instruction.
-  __sync_synchronize();
+    // Tell the C compiler and the processor to not move loads or stores
+    // past this point, to ensure that the critical section's memory
+    // references happen strictly after the lock is acquired.
+    // On RISC-V, this emits a fence instruction.
+    __sync_synchronize();
 
-  // Record info about lock acquisition for holding() and debugging.
-  lk->cpu = mycpu();
+    // Record info about lock acquisition for holding() and debugging.
+    lk->cpu = mycpu();
 }
 
 // Release the lock.
@@ -66,6 +72,7 @@ release(struct spinlock *lk)
   // On RISC-V, sync_lock_release turns into an atomic swap:
   //   s1 = &lk->locked
   //   amoswap.w zero, zero, (s1)
+  // lk->locked = 0
   __sync_lock_release(&lk->locked);
 
   pop_off();
