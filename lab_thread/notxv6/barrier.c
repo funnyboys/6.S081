@@ -22,6 +22,16 @@ barrier_init(void)
   bstate.nthread = 0;
 }
 
+/*
+ * pthread_cond_wait 和 pthread_cond_broadcast 的调用必须持有锁
+ * 执行完毕之后必须释放锁
+ *
+ * pthread_cond_wait(&cond, &mutex)
+ *  释放 mutex, 并阻塞在 cond 中
+ *
+ * pthread_cond_broadcast(&cond)
+ *  唤醒所有阻塞在 cond 中的线程
+ */
 static void 
 barrier()
 {
@@ -30,7 +40,18 @@ barrier()
   // Block until all threads have called barrier() and
   // then increment bstate.round.
   //
-  
+
+  pthread_mutex_lock(&bstate.barrier_mutex);
+
+  bstate.nthread++;
+  if (bstate.nthread == nthread) {
+    bstate.nthread = 0;
+    bstate.round++;
+    pthread_cond_broadcast(&bstate.barrier_cond);
+  } else
+    pthread_cond_wait(&bstate.barrier_cond, &bstate.barrier_mutex);
+
+  pthread_mutex_unlock(&bstate.barrier_mutex);
 }
 
 static void *
