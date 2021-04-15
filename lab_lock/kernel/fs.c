@@ -58,6 +58,8 @@ bzero(int dev, int bno)
   brelse(bp);
 }
 
+#define DEBUG
+
 // Blocks.
 
 // Allocate a zeroed disk block.
@@ -77,6 +79,11 @@ balloc(uint dev)
         log_write(bp);
         brelse(bp);
         bzero(dev, b + bi);
+
+#ifdef DEBUG
+        printf("[%s %d] bp = %p, dev = %d\n", __func__, __LINE__, bp, dev);
+#endif
+
         return b + bi;
       }
     }
@@ -95,6 +102,11 @@ bfree(int dev, uint b)
   bp = bread(dev, BBLOCK(b, sb));
   bi = b % BPB;
   m = 1 << (bi % 8);
+
+#ifdef DEBUG
+  printf("[%s %d] bp = %p, dev = %d, b = %d\n", __func__, __LINE__, bp, dev, b);
+#endif
+
   if((bp->data[bi/8] & m) == 0)
     panic("freeing free block");
   bp->data[bi/8] &= ~m;

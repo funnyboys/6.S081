@@ -3,6 +3,8 @@ struct buf {
   int disk;    // does disk "own" buf?
   uint dev;
   uint blockno;
+
+  // protects reads and writes of the block’s buffered content
   struct sleeplock lock;
   uint refcnt;
   struct buf *prev; // LRU cache list

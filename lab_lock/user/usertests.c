@@ -1728,6 +1728,8 @@ bigwrite(char *s)
   }
 }
 
+//#define DEBUG
+
 // concurrent writes to try to provoke deadlock in the virtio disk
 // driver.
 void
@@ -1748,8 +1750,15 @@ manywrites(char *s)
       name[0] = 'b';
       name[1] = 'a' + ci;
       name[2] = '\0';
+
+#ifdef DEBUG
+      printf("[%s %d]\n", __func__, __LINE__);
       unlink(name);
-      
+      printf("[%s %d]\n", __func__, __LINE__);
+#else
+      unlink(name);
+#endif
+
       for(int iters = 0; iters < howmany; iters++){
         for(int i = 0; i < ci+1; i++){
           int fd = open(name, O_CREATE | O_RDWR);
@@ -1765,10 +1774,24 @@ manywrites(char *s)
           }
           close(fd);
         }
-        unlink(name);
+#ifdef DEBUG
+      printf("[%s %d]\n", __func__, __LINE__);
+      unlink(name);
+      printf("[%s %d]\n", __func__, __LINE__);
+#else
+      unlink(name);
+#endif
+
       }
 
-      unlink(name);
+#ifdef DEBUG
+    printf("[%s %d]\n", __func__, __LINE__);
+    unlink(name);
+    printf("[%s %d]\n", __func__, __LINE__);
+#else
+    unlink(name);
+#endif
+
       exit(0);
     }
   }

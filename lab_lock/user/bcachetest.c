@@ -61,6 +61,7 @@ readfile(char *file, int nbytes, int inc)
       printf("read %s failed for block %d (%d)\n", file, i, nbytes);
       exit(-1);
     }
+    
   }
   close(fd);
 }
@@ -96,11 +97,14 @@ test0()
   printf("start test0\n");
   for(int i = 0; i < NCHILD; i++){
     dir[0] = '0' + i;
+    printf("[%s %d]\n", __func__, __LINE__);
     mkdir(dir);
+    printf("[%s %d]\n", __func__, __LINE__);
     if (chdir(dir) < 0) {
       printf("chdir failed\n");
       exit(1);
     }
+    printf("[%s %d]\n", __func__, __LINE__);
     unlink(file);
     createfile(file, N);
     if (chdir("..") < 0) {
@@ -108,6 +112,7 @@ test0()
       exit(1);
     }
   }
+  printf("[%s %d]\n", __func__, __LINE__);
   m = ntas(0);
   for(int i = 0; i < NCHILD; i++){
     dir[0] = '0' + i;

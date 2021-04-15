@@ -84,6 +84,7 @@ stat(const char *n, struct stat *st)
   return r;
 }
 
+/* str to int */
 int
 atoi(const char *s)
 {

@@ -6,8 +6,8 @@ struct spinlock {
   char *name;        // Name of lock.
   struct cpu *cpu;   // The cpu holding the lock.
 #ifdef LAB_LOCK
-  int nts;
-  int n;
+  int nts;           // 调用 acquire() 但是空转的次数
+  int n;             // 调用 acquire() 的次数
 #endif
 };
 

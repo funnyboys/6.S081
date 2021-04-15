@@ -5,12 +5,15 @@
 #include "defs.h"
 
 volatile static int started = 0;
+volatile int max_cpu = 0;
+
 
 // start() jumps here in supervisor mode on all CPUs.
 void
 main()
 {
-  if(cpuid() == 0){
+  int cpu_id = cpuid();
+  if(cpu_id == 0){
     consoleinit();
 #if defined(LAB_PGTBL) || defined(LAB_LOCK)
     statsinit();
@@ -19,7 +22,7 @@ main()
     printf("\n");
     printf("xv6 kernel is booting\n");
     printf("\n");
-    kinit();         // physical page allocator
+    kinit(cpu_id);   // physical page allocator
     kvminit();       // create kernel page table
     kvminithart();   // turn on paging
     procinit();      // process table
@@ -42,7 +45,10 @@ main()
     while(started == 0)
       ;
     __sync_synchronize();
-    printf("hart %d starting\n", cpuid());
+    printf("hart %d starting\n", cpu_id);
+    if (cpu_id > max_cpu)
+      max_cpu = cpu_id;
+    kinit(cpu_id);
     kvminithart();    // turn on paging
     trapinithart();   // install kernel trap vector
     plicinithart();   // ask PLIC for device interrupts
