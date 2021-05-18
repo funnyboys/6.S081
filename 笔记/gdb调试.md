@@ -6,6 +6,25 @@ make qemu-gdb
 窗口2：
 riscv64-unknown-elf-gdb kernel/kernel
 ```
+
+# gdb设置
+## 取消max-value-size
+提示
+```
+(gdb) value requires 130388 bytes, which is more than max-value-sizeQuit
+```
+使用如下的命令取消限制
+```
+(gdb) set max-value-size unlimited
+```
+
+## gdb不优化宏
+修改 Makefile ，增加 -g3 和 -gdwarf-2 选项。
+```
+-CFLAGS = -Wall -Werror -O -fno-omit-frame-pointer -ggdb
++CFLAGS = -Wall -Werror -g3 -gdwarf-2 -O -fno-omit-frame-pointer -ggdb
+```
+
 # 快捷键
 ## 显示所有断点信息
 ```
@@ -73,6 +92,12 @@ p $x0
 b *0x44444444
 地址前面必须要加星号
 ```
+
+## 添加断点
+```
+b 文件名：行号
+```
+
 ## 打印地址
 ```
 p *argv
@@ -85,4 +110,26 @@ p *argv@2
 ```
 watch sum               //sum有变化时停止
 b sum_to if i==5        //当i=5时，在sum_to设置断点
+```
+
+# gui
+## 查看当前窗口
+```
+(gdb) info win
+Name       Lines Focus
+src           32 (has focus)
+status         1
+cmd           16
+```
+
+## 切换到下个窗口
+```
+(gdb) fs next
+Focus set to cmd window.
+```
+
+## 切换到指定窗口
+```
+(gdb) fs src
+Focus set to src window.
 ```

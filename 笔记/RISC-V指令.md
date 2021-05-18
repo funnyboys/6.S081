@@ -32,6 +32,28 @@ sd ra, 0(a0)
 ```
 将ra的值保存到 a0 + 0 地址中
 
+## sb
+SW，SH 和 SB 指令从寄存器 rs2 的低位取出 32 位，16 位和 8 位的值保存到存储器。
+
+## lui
+LUI (Load upper immediate)
+` lui rd, uimm20  `
+将立即数 uimm20 左移 12 bit，低 12bits 补零，将最终的结果放到 rd 寄存器中。
+例如：
+```
+// a5 = 0x8001 << 12 = 0x8001000
+lui a5,0x8001
+```
+
+## slli
+逻辑左移
+例如：
+```
+// a5 = 0x800_1000
+// a5 = a5 << 8 = 0x8_0010_0000
+slli a5,a5,0x8
+```
+
 ## csrr
 `csrr csr, rs1`
 读 rs1 寄存器的值到 csr 中。
@@ -96,3 +118,13 @@ thread pointer
 
 ## satp寄存器
 Supervisor Address Translation and Protection (satp) Register
+
+# 其它
+## 在汇编中使用label地址
+使用 la 指令。
+```
+// 将 _data_start 的地址放到 a5 寄存器中
+la a5, _data_start
+```
+
+## 汇编中定义变量

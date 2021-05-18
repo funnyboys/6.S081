@@ -1,3 +1,15 @@
+# pipe
+```
+int pipe(int*);
+
+int fd[2];
+ret = pipe(fd);
+fd[0]: 读pipe fd
+fd[1]: 写pipe fd
+```
+pipe()的参数为一个数组，如果函数执行成功，则：
+fd[0]为读pipe的fd，fd[1]为写pipe的fd。
+
 # fstat
 ` int fstat(int fd, struct stat *buf); `
 ## 描述
