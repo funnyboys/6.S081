@@ -210,6 +210,9 @@ commit()
 //   modify bp->data[]
 //   log_write(bp)
 //   brelse(bp)
+
+// add buf blockno to logheader block
+// log.lh.block[i] = b->blockno
 void
 log_write(struct buf *b)
 {

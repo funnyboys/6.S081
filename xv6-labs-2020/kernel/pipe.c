@@ -83,11 +83,20 @@ pipewrite(struct pipe *pi, uint64 addr, int n)
   acquire(&pi->lock);
   for(i = 0; i < n; i++){
     while(pi->nwrite == pi->nread + PIPESIZE){  //DOC: pipewrite-full
+      /*
+       * 为什么这里要判断 readopen 而不是 writeopen
+       *
+       * solution:
+       *    pipe full, 且读 pipe 已经被关闭
+       *    因此没有必要再写入数据
+       */
       if(pi->readopen == 0 || pr->killed){
         release(&pi->lock);
         return -1;
       }
+      // pipe full, wakeup all reader
       wakeup(&pi->nread);
+      // sleep writer until pipe is not full
       sleep(&pi->nwrite, &pi->lock);
     }
     if(copyin(pr->pagetable, &ch, addr + i, 1) == -1)
@@ -115,6 +124,7 @@ piperead(struct pipe *pi, uint64 addr, int n)
     sleep(&pi->nread, &pi->lock); //DOC: piperead-sleep
   }
   for(i = 0; i < n; i++){  //DOC: piperead-copy
+    // pipe empty
     if(pi->nread == pi->nwrite)
       break;
     ch = pi->data[pi->nread++ % PIPESIZE];

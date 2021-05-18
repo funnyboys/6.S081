@@ -13,6 +13,8 @@
 // super block describes the disk layout:
 struct superblock {
   uint magic;        // Must be FSMAGIC
+
+  // number of blocks in filesystem
   uint size;         // Size of file system image (blocks)
   uint nblocks;      // Number of data blocks
   uint ninodes;      // Number of inodes.
@@ -45,9 +47,11 @@ struct dinode {
 #define IBLOCK(i, sb)     ((i) / IPB + sb.inodestart)
 
 // Bitmap bits per block
+// 一个 bitmap 的 block ，可以标识 BPB 个 block
 #define BPB           (BSIZE*8)
 
 // Block of free map containing bit for block b
+// block b对应bitmap的blockno
 #define BBLOCK(b, sb) ((b)/BPB + sb.bmapstart)
 
 // Directory is a file containing a sequence of dirent structures.

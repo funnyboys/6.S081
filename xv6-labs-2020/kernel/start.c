@@ -42,6 +42,10 @@ start()
   timerinit();
 
   // keep each CPU's hartid in its tp register, for cpuid().
+  /*
+   * hartid 仅在 machined mode 可以读取
+   * supervisior mode 无法读, 因此将它保存到 tp 中
+   */
   int id = r_mhartid();
   w_tp(id);
 

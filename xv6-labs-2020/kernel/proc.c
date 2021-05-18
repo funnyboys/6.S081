@@ -620,6 +620,18 @@ sched(void)
     panic("sched interruptible");
 
   intena = mycpu()->intena;
+
+  /*
+   * mycpu()->context = scheduler()
+   *                在 swtch() 之后
+   *
+   * 启动的时候:
+   *    main() -> scheduler()
+   *        swtch(&c->context, &p->context);
+   *
+   * 执行过一次scheduler()后:
+   *    mycpu()->context = c->context() = scheduler()
+   */
   swtch(&p->context, &mycpu()->context);
   mycpu()->intena = intena;
 }
