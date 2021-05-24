@@ -8,26 +8,53 @@
 #include "spinlock.h"
 #include "riscv.h"
 #include "defs.h"
+#include "proc.h"
 
 void freerange(void *pa_start, void *pa_end);
 
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
 
-struct run {
-  struct run *next;
-};
+int get_cpu_id()
+{
+   int cpu;
+   push_off();
+   cpu = cpuid();
+   pop_off();
+   return cpu;
+}
 
-struct {
-  struct spinlock lock;
-  struct run *freelist;
-} kmem;
+// kalloc page from other cpu
+void *migrate_kalloc(int cpu_id)
+{
+  struct run *r = 0;
+  for (int i = 0; i < NCPU; i++) {
+  
+    if (i == cpu_id)
+      continue;
+  
+    acquire(&cpus[i].kmem_cpu.lock);
+    r = cpus[i].kmem_cpu.freelist;
+    if (r) {
+      cpus[i].kmem_cpu.freelist = r->next;
+      release(&cpus[i].kmem_cpu.lock);
+      return r;
+    }
+    release(&cpus[i].kmem_cpu.lock);
+  }
+  return 0;
+}
 
 void
-kinit()
+kinit(int cpu_id)
 {
-  initlock(&kmem.lock, "kmem");
-  freerange(end, (void*)PHYSTOP);
+  char name[10] = {0};
+  snprintf(name, 10, "kmem%d", cpu_id);
+  initlock(&cpus[cpu_id].kmem_cpu.lock, name);
+  cpus[cpu_id].kmem_cpu.freelist = 0;
+
+  if (cpu_id == 0)
+    freerange(end, (void*)PHYSTOP);
 }
 
 void
@@ -46,6 +73,7 @@ freerange(void *pa_start, void *pa_end)
 void
 kfree(void *pa)
 {
+  int cpu_id;
   struct run *r;
 
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
@@ -56,10 +84,11 @@ kfree(void *pa)
 
   r = (struct run*)pa;
 
-  acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  release(&kmem.lock);
+  cpu_id = get_cpu_id();
+  acquire(&cpus[cpu_id].kmem_cpu.lock);
+  r->next = cpus[cpu_id].kmem_cpu.freelist;
+  cpus[cpu_id].kmem_cpu.freelist = r;
+  release(&cpus[cpu_id].kmem_cpu.lock);
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -68,13 +97,20 @@ kfree(void *pa)
 void *
 kalloc(void)
 {
+  int cpu_id;
   struct run *r;
 
-  acquire(&kmem.lock);
-  r = kmem.freelist;
-  if(r)
-    kmem.freelist = r->next;
-  release(&kmem.lock);
+  cpu_id = get_cpu_id();
+
+  acquire(&cpus[cpu_id].kmem_cpu.lock);
+  r = cpus[cpu_id].kmem_cpu.freelist;
+  if (r) {
+    cpus[cpu_id].kmem_cpu.freelist = r->next;
+    release(&cpus[cpu_id].kmem_cpu.lock);
+  } else {
+    release(&cpus[cpu_id].kmem_cpu.lock);
+    r = migrate_kalloc(cpu_id);
+  }
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
