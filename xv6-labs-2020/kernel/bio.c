@@ -33,7 +33,7 @@ struct {
   struct buf head;
 } bcache;
 
-// 头插法，最新的节点放在最前面 head.next
+// 澶存彃娉曪紝鏈�鏂扮殑鑺傜偣鏀惧湪鏈�鍓嶉潰 head.next
 void
 binit(void)
 {

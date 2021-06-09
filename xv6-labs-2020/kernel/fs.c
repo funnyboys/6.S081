@@ -68,11 +68,13 @@ balloc(uint dev)
   struct buf *bp;
 
   bp = 0;
-  // ��������block��Ѱ�ҵ�ǰ��bitmap�ϱ�markΪfree��blockno
+  // 遍历所有block，寻找当前在bitmap上被mark为free的blockno
   for(b = 0; b < sb.size; b += BPB){
     bp = bread(dev, BBLOCK(b, sb));
+    if (bp->refcnt == 1)
+        printf("bp = %p\n", bp);
     for(bi = 0; bi < BPB && b + bi < sb.size; bi++){
-      m = 1 << (bi % 8);    //��block��bitmap�ϵ�bit
+      m = 1 << (bi % 8);    //该block在bitmap上的bit
       if((bp->data[bi/8] & m) == 0){  // Is block free?
         bp->data[bi/8] |= m;  // Mark block in use.
         log_write(bp);
@@ -200,6 +202,7 @@ ialloc(uint dev, short type)
   struct buf *bp;
   struct dinode *dip;
 
+  // 遍历所有inode号，查找一个空闲的inode
   for(inum = 1; inum < sb.ninodes; inum++){
     bp = bread(dev, IBLOCK(inum, sb));
     dip = (struct dinode*)bp->data + inum%IPB;
@@ -297,6 +300,7 @@ ilock(struct inode *ip)
 
   acquiresleep(&ip->lock);
 
+  // ip->valid = 0时，in-memory inode 无效
   if(ip->valid == 0){
     bp = bread(ip->dev, IBLOCK(ip->inum, sb));
     dip = (struct dinode*)bp->data + ip->inum%IPB;

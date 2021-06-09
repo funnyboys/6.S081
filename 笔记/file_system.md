@@ -236,6 +236,111 @@ in-memory inode：on-disk inode的副本和内核需要的部分信息。
 ## on-disk inode
 on-disk inode保存在硬盘的inode分区，从block(2+sb.nlog)开始，共sb.ninodes个block。
 xv6使用 struct dinode 保存 on-disk 的 inode 信息。
+```
+// On-disk inode structure
+struct dinode {
+  // inode类型(包括directory, file, device, 当 type == 0 , 当前inode为free状态)
+  short type;           // File type(stat.h     dir, file, device)
+  short major;          // Major device number (T_DEVICE only)
+  short minor;          // Minor device number (T_DEVICE only)
+
+  // directory entry对该inode的引用数(当 nlink == 0 , 当前inode可以被free)
+  short nlink;          // Number of links to inode in file system
+  uint size;            // Size of file (bytes)
+  uint addrs[NDIRECT+1];   // Data block addresses
+};
+```
 
 ## in-memory inode
+### 数据结构
 struct inode 用来表示 in-memory inode 。
+```
+// in-memory copy of a struct dinode on disk
+struct inode {
+  uint dev;           // Device number
+  uint inum;          // Inode number
+  int ref;            // Reference count
+  struct sleeplock lock; // protects everything below here
+  int valid;          // inode has been read from disk?
+
+  short type;         // copy of disk inode
+  short major;
+  short minor;
+  short nlink;        // the number of directory entries that refer to a ﬁle
+  uint size;
+#ifdef SOL_FS
+#else
+  uint addrs[NDIRECT+1];
+#endif
+};
+```
+
+### 分配和释放
+iget()：
+* 在设备上找到指定的inode，返回in-memory copy。
+* iget()不会持有inode的锁，也不会从磁盘读取信息。
+* 如果当前 in-memory inode 已经被cache，增加引用计数 ip->ref
+* 同一个disk inode，可以被多个内存引用，便于并行访问。
+
+iput():
+* 减去引用计数 ip->ref
+
+ilock():
+* 获取当前inode的sleeplock
+* 如果 inode->valid == 0，从磁盘中读取该inode的信息
+
+iunlock():
+* 释放inode的sleeplock
+
+总结:
+1. 通过iget()，多个cpu可以获取同一个inode的信息
+2. 在某一时刻，只有一个cpu可以获取inode的锁
+
+## inode的四种同步策略
+1. icache.lock protects the invariant that an inode is present in the cache at most once, and the invariant that a cached inode’s ref ﬁeld counts the number of in-memory pointers to the cached inod
+2. in-memory inode拥有lock变量(sleeplock)，用来保证对inode成员变量的并发访问
+```
+// in-memory copy of a struct dinode on disk
+struct inode {
+  uint dev;           // Device number
+  uint inum;          // Inode number
+  int ref;            // Reference count
+  struct sleeplock lock; // protects everything below here
+  int valid;          // inode has been read from disk?
+
+  short type;         // copy of disk inode
+  short major;
+  short minor;
+  short nlink;
+  uint size;
+#ifdef SOL_FS
+#else
+  uint addrs[NDIRECT+1];
+#endif
+};
+```
+3. 当inode->ref大于0时，表示当前inode仍在cache中，xv6不会释放当前inode。
+4. inode->nlink统计了引用该文件的directory个数，如果nlink大于0，xv6不会释放当前inode。
+
+## 分配inode
+```
+struct inode* ialloc(uint dev, short type)
+```
+1. 遍历所有inode，查找一个空闲的inode编号；
+    * 根据编号，读取disk中对应的inode block，如果inode->type == 0，表示该inode为free状态
+2. 修改 inode block 的 type ，将修改后的内容写入disk；
+3. 使用设备号和inode号，分配一个in-memory inode的缓存(iget)。
+
+### 判断当前inode是否已经被分配
+inode->type == 0    :   空闲
+            非0      :   in use
+
+## inode的典型使用
+//   ip = iget(dev, inum)
+//   ilock(ip)
+//   ... examine and modify ip->xxx ...
+//   iunlock(ip)
+//   iput(ip)
+为什么 iget() 和 ilock() 要分开？
+iget()提供给系统调用，来作为长期引用，例如openfile。
+ilock()提供锁，短期使用，一般用来修改数据。

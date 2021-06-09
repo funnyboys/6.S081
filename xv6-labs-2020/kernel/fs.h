@@ -32,12 +32,15 @@ struct superblock {
 
 // On-disk inode structure
 struct dinode {
-  short type;           // File type
+  // inode类型(包括directory, file, device, 当 type == 0 , 当前inode为free状态)
+  short type;           // File type(stat.h     dir, file, device)
   short major;          // Major device number (T_DEVICE only)
   short minor;          // Minor device number (T_DEVICE only)
+
+  // directory entry对该inode的引用数(当 nlink == 0 , 当前inode可以被free)
   short nlink;          // Number of links to inode in file system
   uint size;            // Size of file (bytes)
-  uint addrs[NDIRECT+1];   // Data block addresses
+  uint addrs[NDIRECT+1];   // Data block addresses(direct block + indirect block)
 };
 
 // Inodes per block.
@@ -47,11 +50,11 @@ struct dinode {
 #define IBLOCK(i, sb)     ((i) / IPB + sb.inodestart)
 
 // Bitmap bits per block
-// һ�� bitmap �� block �����Ա�ʶ BPB �� block
+// 一个 bitmap 的 block ，可以标识 BPB 个 block
 #define BPB           (BSIZE*8)
 
 // Block of free map containing bit for block b
-// block b��Ӧbitmap��blockno
+// block b对应bitmap的blockno
 #define BBLOCK(b, sb) ((b)/BPB + sb.bmapstart)
 
 // Directory is a file containing a sequence of dirent structures.
